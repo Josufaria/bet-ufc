@@ -1536,7 +1536,7 @@ footer a:hover { text-decoration: underline; }
 }
 .tale-body {
   display: flex;
-  align-items: center;
+  align-items: stretch;
   justify-content: space-between;
   gap: 8px;
 }
@@ -1544,8 +1544,15 @@ footer a:hover { text-decoration: underline; }
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: space-between;
   width: 30%;
   text-align: center;
+}
+.tale-fighter-top {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
 }
 .tale-photo-wrap {
   position: relative;
@@ -2052,291 +2059,6 @@ footer a:hover { text-decoration: underline; }
   color: var(--cyan);
 }
 
-/* ══════════════════════════════════════════
-   MOBILE RESPONSIVENESS (UI & UX DE PONTA)
-   ══════════════════════════════════════════ */
-@media (max-width: 768px) {
-  /* Navbar & Header compactos */
-  nav {
-    height: 54px;
-    padding: 0 12px;
-  }
-  .logo {
-    font-size: 17px;
-  }
-  .nav-right {
-    gap: 6px;
-  }
-  .sync-pill {
-    font-size: 10px;
-    padding: 3px 8px;
-  }
-
-  /* Hero compacto com KPIs em 2 colunas */
-  .hero {
-    padding: 22px 14px 18px;
-  }
-  .hero-badge {
-    font-size: 10px;
-    padding: 4px 10px;
-    margin-bottom: 10px;
-  }
-  .hero-title {
-    font-size: 27px;
-    letter-spacing: -1px;
-    line-height: 1.1;
-  }
-  .hero-sub {
-    font-size: 13px;
-    margin-bottom: 14px;
-  }
-  .hero-kpis {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 8px;
-    width: 100%;
-  }
-  .hero-kpi {
-    width: 100%;
-    padding: 10px 12px;
-  }
-  .hero-kpi-val {
-    font-size: 20px;
-  }
-  .hero-kpi-lbl {
-    font-size: 10px;
-  }
-
-  /* Barra segmentada horizontal de 3 abas */
-  .main-tabs {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 6px;
-    padding: 6px;
-    margin-top: 14px;
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-  }
-  .tab-btn {
-    width: 100%;
-    justify-content: center;
-    text-align: center;
-    border-radius: 8px;
-    border-bottom: none;
-    padding: 9px 6px;
-    font-size: 12px;
-    gap: 4px;
-    line-height: 1.2;
-  }
-  .tab-btn.active {
-    background: rgba(232, 184, 75, 0.14);
-    border: 1px solid rgba(232, 184, 75, 0.35);
-  }
-
-  /* Event Picker & Busca */
-  .ev-picker-section {
-    margin-top: 14px;
-    padding: 12px;
-  }
-  .ev-picker-bar {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
-    justify-content: flex-start;
-    padding-bottom: 4px;
-  }
-  .ev-picker-bar::-webkit-scrollbar { display: none; }
-  .ev-pill {
-    white-space: nowrap;
-    flex-shrink: 0;
-  }
-  .ev-selector-row {
-    gap: 8px;
-  }
-  .ev-select {
-    font-size: 13px;
-    padding: 9px 10px;
-  }
-  .global-fighter-search-wrap {
-    flex: 1 1 100%;
-    min-width: 100%;
-  }
-
-  /* Filtros Rápidos e Sub-abas em linha única deslizável */
-  .cards-toolbar {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 10px;
-    margin-bottom: 14px;
-  }
-  .cards-search-wrap {
-    max-width: 100%;
-    min-width: 100%;
-  }
-  .qf-group,
-  .hist-subtabs {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
-    padding-bottom: 4px;
-  }
-  .qf-group::-webkit-scrollbar,
-  .hist-subtabs::-webkit-scrollbar {
-    display: none;
-  }
-  .qf-btn,
-  .hist-subtab {
-    white-space: nowrap;
-    flex-shrink: 0;
-    padding: 7px 11px;
-    font-size: 12px;
-  }
-
-  /* Seções colapsáveis no mobile para diminuir rolagem */
-  .section {
-    margin-top: 22px;
-  }
-  .section-collapse-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-  }
-  .section-collapsed-mobile .section-collapsible-body {
-    display: none !important;
-  }
-
-  /* Fight Cards otimizados */
-  .tale-card {
-    padding: 12px 10px;
-    margin-bottom: 12px;
-  }
-  .tale-header {
-    font-size: 10px;
-    margin-bottom: 10px;
-  }
-  .tale-body {
-    flex-wrap: wrap;
-    justify-content: space-between;
-    align-items: flex-start;
-    gap: 8px;
-  }
-  .tale-fighter {
-    width: calc(50% - 4px);
-  }
-  .tale-center {
-    width: 100%;
-    flex: none;
-    order: 3;
-    padding: 10px 0 0 0;
-    margin-top: 6px;
-    border-top: 1px solid var(--border);
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 6px;
-  }
-  .tale-row {
-    padding: 5px 6px;
-    font-size: 11px;
-  }
-  .tale-row .lbl {
-    font-size: 8px;
-    width: auto;
-  }
-  .tale-row .val {
-    width: auto;
-    font-size: 11px;
-  }
-  .tale-photo-wrap {
-    width: 64px;
-    height: 64px;
-    margin-bottom: 6px;
-  }
-  .tale-name {
-    font-size: 13px;
-    min-height: 32px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-  .tale-fighter-actions {
-    flex-direction: column;
-    gap: 5px;
-  }
-  .tale-fighter-actions .fc-pick-btn,
-  .tale-fighter-actions .fc-hist-btn {
-    width: 100%;
-    min-height: 32px;
-    justify-content: center;
-  }
-  .fc-pick-banner {
-    font-size: 11px;
-    padding: 7px 9px;
-  }
-  .ticket-bar-inner {
-    padding: 10px 12px;
-    gap: 10px;
-  }
-  .ticket-bar-right {
-    width: 100%;
-    flex-wrap: wrap;
-    gap: 8px;
-  }
-
-  /* Modal Bottom-Sheet no celular */
-  .modal-overlay {
-    padding: 0;
-    align-items: flex-end;
-  }
-  .modal-card,
-  .fighter-history-modal-card {
-    width: 100%;
-    max-width: 100%;
-    max-height: 88vh;
-    overflow-y: auto;
-    border-radius: 20px 20px 0 0 !important;
-    padding: 18px 14px 22px;
-  }
-  .fp-kpis {
-    grid-template-columns: repeat(2, 1fr);
-  }
-  .fp-history-list {
-    max-height: 220px;
-  }
-
-  /* Chatbot adaptado para telas pequenas */
-  #chatbot-fab {
-    bottom: 16px;
-    right: 14px;
-    padding: 10px 14px;
-    font-size: 13px;
-  }
-  #chatbot-window {
-    right: 10px;
-    left: 10px;
-    bottom: 72px;
-    width: auto;
-    max-height: 70vh;
-  }
-
-  /* Skeletons */
-  .skeleton-grid {
-    grid-template-columns: 1fr;
-    padding: 0 12px;
-  }
-  .skeleton-card {
-    flex-direction: column;
-    height: auto;
-    gap: 16px;
-  }
-  .skel-photo {
-    width: 70px;
-    height: 70px;
-  }
-}
-
 
 /* ══════════════════════════════════════════
    BUSCA GLOBAL DE LUTADOR & SUB-ABAS HISTÓRICO
@@ -2504,5 +2226,433 @@ footer a:hover { text-decoration: underline; }
   margin-top: 3px;
   font-size: 10px;
   color: var(--text3);
-  line-height: 1.2;
+  line-height: 1.25;
+}
+
+/* ══════════════════════════════════════════
+   MOBILE RESPONSIVENESS (FINAL DA CASCATA)
+   ══════════════════════════════════════════ */
+@media (max-width: 768px) {
+  /* Navbar & Header compactos sem espremer pills */
+  nav {
+    height: 54px;
+    padding: 0 12px;
+    gap: 8px;
+  }
+  .logo {
+    font-size: 16px;
+    gap: 5px;
+    min-width: 0;
+  }
+  .logo-icon {
+    font-size: 18px;
+  }
+  .nav-right {
+    gap: 5px;
+    flex-shrink: 0;
+  }
+  .sync-pill {
+    font-size: 10px;
+    padding: 4px 8px;
+    max-width: 112px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Hero compacto com KPIs em 2 colunas */
+  .hero {
+    padding: 20px 14px 16px;
+  }
+  .hero-badge {
+    font-size: 10px;
+    padding: 4px 10px;
+    margin-bottom: 10px;
+    letter-spacing: 1px;
+  }
+  .hero-title {
+    font-size: 27px;
+    letter-spacing: -1px;
+    line-height: 1.1;
+    margin-bottom: 10px;
+  }
+  .hero-sub {
+    font-size: 13px;
+    margin-bottom: 16px;
+    line-height: 1.45;
+  }
+  .hero-kpis {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+    width: 100%;
+  }
+  .hero-kpi {
+    width: 100%;
+    min-width: 0;
+    padding: 10px 12px;
+  }
+  .kpi-val {
+    font-size: 22px;
+  }
+  .kpi-lbl {
+    font-size: 10px;
+  }
+
+  /* Barra segmentada horizontal de 3 abas */
+  .main-tabs {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+    padding: 6px;
+    margin-top: 14px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+  }
+  .tab-btn {
+    width: 100%;
+    justify-content: center;
+    text-align: center;
+    border-radius: 8px;
+    border-bottom: none;
+    padding: 9px 6px;
+    font-size: 11.5px;
+    gap: 4px;
+    line-height: 1.2;
+  }
+  .tab-btn.active {
+    background: rgba(232, 184, 75, 0.14);
+    border: 1px solid rgba(232, 184, 75, 0.35);
+  }
+
+  /* Event Picker sem quebrar layout */
+  .ev-picker-section {
+    margin-top: 14px;
+    padding: 12px;
+  }
+  .ev-picker-header {
+    flex-wrap: wrap;
+    gap: 4px 10px;
+    margin-bottom: 8px;
+    padding: 0;
+  }
+  .ev-meta {
+    margin-left: 0;
+    width: 100%;
+    font-size: 11px;
+  }
+  .ev-picker-bar {
+    flex-direction: column;
+    overflow: visible;
+    padding-bottom: 0;
+  }
+  .ev-pill {
+    padding: 6px 11px;
+    font-size: 12px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  /* Toolbar de Busca + Filtros Rápidos (CORRIGE flex-basis vertical gigante) */
+  .cards-toolbar {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    margin-bottom: 14px;
+  }
+  .cards-search-wrap,
+  .global-fighter-search-wrap {
+    flex: none !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    height: auto !important;
+  }
+  #card-search-input,
+  .global-fighter-search-wrap input {
+    height: 40px;
+    font-size: 13px;
+  }
+  .qf-group,
+  .hist-subtabs {
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    gap: 6px;
+    padding-bottom: 4px;
+  }
+  .qf-group::-webkit-scrollbar,
+  .hist-subtabs::-webkit-scrollbar {
+    display: none;
+  }
+  .qf-btn,
+  .hist-subtab {
+    white-space: nowrap;
+    flex-shrink: 0;
+    padding: 7px 11px;
+    font-size: 12px;
+  }
+
+  /* Seções & Cabeçalhos compactos */
+  .section {
+    margin-top: 24px;
+  }
+  .section-header {
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  .section-title {
+    font-size: 18px;
+    line-height: 1.2;
+  }
+  .section-sub {
+    font-size: 12px;
+    line-height: 1.4;
+  }
+  .section-collapse-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .section-collapsed-mobile .section-collapsible-body {
+    display: none !important;
+  }
+
+  /* Fight Cards — Lado a Lado Alinhado + Tale Center Linha a Linha */
+  .tale-card {
+    padding: 12px 10px;
+    margin-bottom: 12px;
+  }
+  .tale-header {
+    font-size: 10px;
+    margin-bottom: 10px;
+  }
+  .tale-body {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .tale-fighter {
+    width: calc(50% - 4px);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .tale-photo-wrap {
+    width: 62px;
+    height: 62px;
+    margin-bottom: 6px;
+  }
+  .tale-name {
+    font-size: 13px;
+    line-height: 1.2;
+    min-height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    word-break: break-word;
+  }
+  .tale-fighter-actions {
+    flex-direction: column;
+    gap: 5px;
+    margin-top: 8px;
+  }
+  .tale-fighter-actions .fc-pick-btn,
+  .tale-fighter-actions .fc-hist-btn {
+    width: 100%;
+    min-height: 32px;
+    justify-content: center;
+    font-size: 11px;
+  }
+
+  /* Tale Center sempre em coluna única (Esquerda vs Direita alinhado aos lutadores) */
+  .tale-center {
+    width: 100%;
+    flex: none;
+    order: 3;
+    padding: 10px 0 0 0;
+    margin-top: 6px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .tale-row {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 5px 8px;
+    font-size: 11.5px;
+  }
+  .tale-row .val {
+    width: 34%;
+    font-size: 11.5px;
+  }
+  .tale-row .lbl {
+    width: 32%;
+    font-size: 8.5px;
+    text-align: center;
+  }
+
+  .fc-pick-banner {
+    font-size: 11.5px;
+    padding: 8px 10px;
+    gap: 4px 8px;
+  }
+  .tale-badges {
+    justify-content: center;
+    gap: 5px;
+  }
+  .badge {
+    font-size: 10px;
+    padding: 3px 7px;
+  }
+
+  /* Bilhete no Mobile */
+  .ticket-bar-inner {
+    padding: 10px 12px;
+    gap: 10px;
+  }
+  .ticket-bar-right {
+    width: 100%;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  /* Cards de KPI & ROI Compare (Super Confiança / Locks / Favoritos / Zebras) em Grid 2x2 */
+  .stats-row,
+  .roi-compare-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+    margin-bottom: 18px;
+  }
+  .stat-card,
+  .roi-card {
+    padding: 12px 10px !important;
+  }
+  .stat-val {
+    font-size: 24px;
+  }
+  .stat-lbl {
+    font-size: 9.5px;
+    margin-top: 5px;
+  }
+  .roi-label {
+    font-size: 10px;
+    margin-bottom: 6px;
+  }
+  .roi-number {
+    font-size: 24px;
+    letter-spacing: -1px;
+  }
+  .roi-desc {
+    font-size: 11px;
+    margin-top: 6px;
+    line-height: 1.35;
+  }
+  .roi-detail {
+    margin-top: 10px;
+    gap: 6px 10px;
+  }
+  .roi-d-item {
+    font-size: 10.5px;
+  }
+
+  /* Tabelas com rolagem horizontal limpa sem quebrar células */
+  .ev-table-wrap,
+  .picks-table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .ev-table th,
+  .ev-table td,
+  .odds-cat-table th,
+  .odds-cat-table td {
+    padding: 8px 10px;
+    font-size: 11.5px;
+    white-space: nowrap;
+  }
+  .zebra-section-banner {
+    padding: 12px 14px;
+    gap: 10px;
+  }
+  .zebra-banner-title {
+    font-size: 15px;
+  }
+
+  /* Modal Bottom-Sheet no celular */
+  .modal-overlay {
+    padding: 0;
+    align-items: flex-end;
+  }
+  .modal-card,
+  .fighter-history-modal-card {
+    width: 100%;
+    max-width: 100%;
+    max-height: 88vh;
+    overflow-y: auto;
+    border-radius: 20px 20px 0 0 !important;
+    padding: 18px 14px 22px;
+  }
+  .fp-kpis {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 6px;
+  }
+  .fp-history-list {
+    max-height: 220px;
+  }
+
+  /* Chatbot adaptado para telas pequenas */
+  .chatbot-btn {
+    width: 50px;
+    height: 50px;
+    font-size: 22px;
+    bottom: 14px;
+    right: 14px;
+  }
+  .chatbot-window {
+    right: 10px;
+    left: 10px;
+    bottom: 72px;
+    width: auto;
+    height: 68vh;
+    max-height: 520px;
+  }
+
+  /* Skeletons */
+  .skeleton-grid {
+    grid-template-columns: 1fr;
+    padding: 0 12px;
+  }
+  .skeleton-card {
+    flex-direction: column;
+    height: auto;
+    gap: 16px;
+  }
+  .skel-photo {
+    width: 70px;
+    height: 70px;
+  }
+}
+
+@media (max-width: 400px) {
+  .roi-compare-grid {
+    grid-template-columns: 1fr;
+  }
+  .hero-title {
+    font-size: 24px;
+  }
+  .tab-btn {
+    font-size: 11px;
+    padding: 8px 4px;
+  }
 }

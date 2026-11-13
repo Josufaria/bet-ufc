@@ -330,11 +330,12 @@ function ensureAllEventsAnalyzed() {
   _zebraStats = baseZebraStats;
 }
 
-function setSyncStatus(text, state = 'ok') {
+function setSyncStatus(text, state = 'ok', title = '') {
   const el = document.getElementById('sync-status-pill');
   if (!el) return;
   el.textContent = text;
   el.className = `sync-pill sync-${state}`;
+  if (title) el.title = title;
 }
 
 async function fetchPublicEspnScoreboardDirect() {
@@ -557,7 +558,7 @@ async function syncLiveOddsInBackground() {
     if (changed > 0 || hasMetadataUpdate) {
       if (changed > 0) ensureAllEventsAnalyzed();
       renderEvento();
-      setSyncStatus(`🟢 Odds agregadas (${json.source})`, 'ok');
+      setSyncStatus('🟢 Odds Ao Vivo', 'ok', `Fontes agregadas: ${json.source}`);
     }
   } catch (e) {
     // falha silenciosa: base local / ESPN segue ativa
@@ -1909,13 +1910,16 @@ function buildFightCard(c, ev, idx, preAnalysis = null, preDbA = null, preDbB = 
     if (!mainHtml) return '';
 
     const subParts = [];
+    const tipParts = [];
     if (bestOdd && oddNum && bestOdd > oddNum + 0.01) {
-      subParts.push(`📈 Pico ${Number(bestOdd).toFixed(2)}${bestBook ? ' (' + escHtml(bestBook) + ')' : ''}`);
+      subParts.push(`📈 Pico ${Number(bestOdd).toFixed(2)}`);
+      if (bestBook) tipParts.push(`Melhor odd: ${bestBook}`);
     }
     if (openOdd && openOdd > 1) {
       subParts.push(`Abriu ${Number(openOdd).toFixed(2)}`);
     }
-    const subHtml = subParts.length ? `<div class="tale-odds-sub">${subParts.join(' · ')}</div>` : '';
+    const subTitle = tipParts.length ? ` title="${escHtml(tipParts.join(' · '))}"` : '';
+    const subHtml = subParts.length ? `<div class="tale-odds-sub"${subTitle}>${subParts.join(' · ')}</div>` : '';
     return mainHtml + subHtml;
   };
   const oddsVHtml = renderOdds(oV, analysis?.oddsEstA, c.espnOdds, c.bestOV, c.bestBookV, c.openOV);
@@ -1966,8 +1970,8 @@ function buildFightCard(c, ev, idx, preAnalysis = null, preDbA = null, preDbB = 
 
   const weightLabel = c.weightClass || dbA?.weight_class || dbB?.weight_class || 'UFC Bout';
   const segLabel = c.cardSegment || (idx === 0 ? 'Main Event' : idx === 1 ? 'Co-Main' : '');
-  const styleVTag = dbA?.style ? `<span class="fc-style-tag">${escHtml(dbA.style)}</span>` : '';
-  const styleATag = dbB?.style ? `<span class="fc-style-tag">${escHtml(dbB.style)}</span>` : '';
+  const styleVTag = `<span class="fc-style-tag">${escHtml(dbA?.style || 'MMA')}</span>`;
+  const styleATag = `<span class="fc-style-tag">${escHtml(dbB?.style || 'MMA')}</span>`;
 
   // Botão de IA
   const aiBtnId = `ai-btn-${idx}`;
@@ -1989,10 +1993,12 @@ function buildFightCard(c, ev, idx, preAnalysis = null, preDbA = null, preDbB = 
 
       <div class="tale-body">
         <div class="tale-fighter left ${isWinV ? 'winner' : ''} ${myPick === fV ? 'user-picked' : ''}">
-          ${renderPhoto(photoV, fV)}
-          <div class="tale-name fc-fighter-trigger" ${fV ? `data-fighter="${escHtml(fV)}" title="Ver histórico de ${escHtml(fV)}"` : ''}>${escHtml(fV || '—')}</div>
-          ${styleVTag}
-          ${oddsVHtml}
+          <div class="tale-fighter-top">
+            ${renderPhoto(photoV, fV)}
+            <div class="tale-name fc-fighter-trigger" ${fV ? `data-fighter="${escHtml(fV)}" title="Ver histórico de ${escHtml(fV)}"` : ''}>${escHtml(fV || '—')}</div>
+            ${styleVTag}
+            ${oddsVHtml}
+          </div>
           <div class="tale-fighter-actions">
             ${selBtnV}
             ${histBtnV}
@@ -2023,10 +2029,12 @@ function buildFightCard(c, ev, idx, preAnalysis = null, preDbA = null, preDbB = 
         </div>
 
         <div class="tale-fighter right ${isWinA ? 'winner' : ''} ${myPick === fA ? 'user-picked' : ''}">
-          ${renderPhoto(photoA, fA)}
-          <div class="tale-name fc-fighter-trigger" ${fA ? `data-fighter="${escHtml(fA)}" title="Ver histórico de ${escHtml(fA)}"` : ''}>${escHtml(fA || '—')}</div>
-          ${styleATag}
-          ${oddsAHtml}
+          <div class="tale-fighter-top">
+            ${renderPhoto(photoA, fA)}
+            <div class="tale-name fc-fighter-trigger" ${fA ? `data-fighter="${escHtml(fA)}" title="Ver histórico de ${escHtml(fA)}"` : ''}>${escHtml(fA || '—')}</div>
+            ${styleATag}
+            ${oddsAHtml}
+          </div>
           <div class="tale-fighter-actions">
             ${selBtnA}
             ${histBtnA}
