@@ -2005,3 +2005,167 @@ footer a:hover { text-decoration: underline; }
     height: 70px;
   }
 }
+
+
+/* ══════════════════════════════════════════
+   BUSCA GLOBAL DE LUTADOR & SUB-ABAS HISTÓRICO
+   ══════════════════════════════════════════ */
+.global-fighter-search-wrap {
+  position: relative;
+  flex: 1 1 240px;
+  min-width: 220px;
+  display: flex;
+  align-items: center;
+}
+.global-fighter-search-wrap input {
+  width: 100%;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 9px 12px 9px 34px;
+  color: var(--text);
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.global-fighter-search-wrap input:focus {
+  border-color: var(--cyan);
+}
+.global-fighter-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  background: var(--bg2);
+  border: 1px solid var(--border2);
+  border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
+  z-index: 60;
+  max-height: 290px;
+  overflow-y: auto;
+}
+.gf-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  padding: 10px 12px;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 13px;
+}
+.gf-item:hover {
+  background: rgba(0, 212, 255, 0.09);
+}
+.gf-item-meta {
+  font-size: 11px;
+  color: var(--text2);
+  white-space: nowrap;
+}
+
+.hist-subtabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 20px;
+  margin-bottom: 8px;
+}
+.hist-subtab {
+  background: var(--card);
+  border: 1px solid var(--border);
+  color: var(--text2);
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.hist-subtab:hover {
+  border-color: var(--cyan);
+  color: var(--text);
+}
+.hist-subtab.active {
+  background: rgba(0, 212, 255, 0.14);
+  border-color: var(--cyan);
+  color: var(--cyan);
+}
+
+.ticket-action-btn {
+  background: rgba(0, 212, 255, 0.12);
+  border: 1px solid rgba(0, 212, 255, 0.35);
+  color: var(--cyan);
+  padding: 6px 11px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.ticket-action-btn:hover {
+  background: rgba(0, 212, 255, 0.22);
+}
+
+.fighter-profile-summary {
+  margin: 10px 0 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+}
+.fp-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(95px, 1fr));
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.fp-kpi {
+  background: rgba(0, 0, 0, 0.22);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+  padding: 7px 9px;
+}
+.fp-kpi span {
+  display: block;
+  font-size: 10px;
+  color: var(--text3);
+  text-transform: uppercase;
+}
+.fp-kpi strong {
+  font-size: 13px;
+  color: var(--text);
+}
+.fp-history-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text2);
+  margin-bottom: 6px;
+}
+.fp-history-list {
+  max-height: 155px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.fp-fight-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.025);
+}
+.my-bets-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}

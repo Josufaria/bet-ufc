@@ -1,6 +1,9 @@
 // Constantes
 const GEMINI_API_URL = '/api/gemini';
 const GEMINI_TIMEOUT_MS = 4000;
+if (typeof window !== 'undefined' && window._geminiCloudAvailable === undefined) {
+  window._geminiCloudAvailable = true;
+}
 
 function escapeAiHtml(str) {
   return String(str == null ? '' : str)
@@ -356,6 +359,10 @@ async function sendChatMessage() {
   chatBody.scrollTop = chatBody.scrollHeight;
 
   try {
+    if (typeof window !== 'undefined' && window._geminiCloudAvailable === false) {
+      throw new Error('Modo tático local ativo');
+    }
+
     const contextStr = buildGeminiContext();
 
     const prompt = `Você é o Chatbot Assistente oficial do site UFC Bet Analyzer.
@@ -371,6 +378,7 @@ async function sendChatMessage() {
     aiDiv.style.color = '';
     aiDiv.innerHTML = formatChatMarkdown(aiResponse);
   } catch (error) {
+    if (typeof window !== 'undefined') window._geminiCloudAvailable = false;
     aiDiv.style.color = '';
     aiDiv.innerHTML = formatChatMarkdown(generateLocalChatReply(message));
   }
@@ -378,13 +386,23 @@ async function sendChatMessage() {
   chatBody.scrollTop = chatBody.scrollHeight;
 }
 
-// --- PREVISÃO DE LUTAS ---
+// --- PREVISÃO DE LUTAS (0ms INSTANTÂNEA + UPGRADE CLOUD SE DISPONÍVEL) ---
 
 async function analyzeFightWithAI(f1Name, f2Name, cardElementId, algorithmPick) {
   const targetElement = document.getElementById(cardElementId);
   if (!targetElement) return;
 
-  targetElement.innerHTML = '<div class="ai-loading">A IA está analisando...</div>';
+  const localSummary = generateLocalFightAnalysis(f1Name, f2Name, algorithmPick);
+  targetElement.innerHTML = `
+    <div class="ai-result">
+      <strong>⚡ Raio-X Tático PunterMind:</strong><br>
+      ${escapeAiHtml(localSummary)}
+    </div>
+  `;
+
+  if (typeof window !== 'undefined' && window._geminiCloudAvailable === false) {
+    return;
+  }
 
   try {
     // Busca dados dos lutadores no banco de dados se disponível
@@ -409,17 +427,11 @@ async function analyzeFightWithAI(f1Name, f2Name, cardElementId, algorithmPick) 
 
     targetElement.innerHTML = `
       <div class="ai-result">
-        <strong>🤖 Análise de IA:</strong><br>
+        <strong>🤖 Raio-X IA Cloud + PunterMind:</strong><br>
         ${escapeAiHtml(aiResponse).replace(/\n/g, '<br>')}
       </div>
     `;
   } catch (error) {
-    const localSummary = generateLocalFightAnalysis(f1Name, f2Name, algorithmPick);
-    targetElement.innerHTML = `
-      <div class="ai-result">
-        <strong>📊 Análise Tática Local (Modo Offline):</strong><br>
-        ${escapeAiHtml(localSummary)}
-      </div>
-    `;
+    if (typeof window !== 'undefined') window._geminiCloudAvailable = false;
   }
 }

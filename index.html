@@ -7,7 +7,7 @@
   <meta name="description" content="Análise profissional de lutas UFC com probabilidades ajustadas por altura, envergadura, estilo de luta e detector de zebras. Picks EV+ com dados históricos reais.">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🥊</text></svg>">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css?v=8">
+  <link rel="stylesheet" href="css/style.css?v=9">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 </head>
 <body>
@@ -125,11 +125,19 @@
           <span class="cards-search-icon">🔍</span>
           <input type="search" id="card-search-input" placeholder="Buscar lutador ou categoria no card…" autocomplete="off" />
         </div>
+        <div class="global-fighter-search-wrap">
+          <span class="cards-search-icon">🌎</span>
+          <input type="search" id="global-fighter-input" placeholder="Raio-X Global de Lutador (4.287 atletas)…" autocomplete="off" />
+          <div id="global-fighter-dropdown" class="global-fighter-dropdown" style="display:none"></div>
+        </div>
         <div class="qf-group">
           <button type="button" class="qf-btn active" data-qf="all">Todas <span class="qf-count">0</span></button>
           <button type="button" class="qf-btn" data-qf="precision">🎯 Alta Precisão <span class="qf-count">0</span></button>
           <button type="button" class="qf-btn" data-qf="ev">EV+ 🔥 <span class="qf-count">0</span></button>
           <button type="button" class="qf-btn" data-qf="zebra">Zebras 🦓 <span class="qf-count">0</span></button>
+          <button type="button" class="qf-btn" data-qf="ko">🥊 KO/TKO <span class="qf-count">0</span></button>
+          <button type="button" class="qf-btn" data-qf="sub">🥋 SUB <span class="qf-count">0</span></button>
+          <button type="button" class="qf-btn" data-qf="dec">📋 DEC <span class="qf-count">0</span></button>
           <button type="button" class="qf-btn" data-qf="ticket">Meus Palpites 🎟️ <span class="qf-count">0</span></button>
         </div>
       </div>
@@ -208,8 +216,16 @@
        ABA 2: HISTÓRICO E PERFORMANCE ACUMULADA
        ══════════════════════════════════════════ -->
   <div id="tab-content-historico" style="display:none">
+    <div class="hist-subtabs" id="hist-subtabs">
+      <button type="button" class="hist-subtab active" data-htab="overview" onclick="switchHistSubTab('overview')">📊 Visão Geral & ROI</button>
+      <button type="button" class="hist-subtab" data-htab="events" onclick="switchHistSubTab('events')">📋 Auditoria por Evento</button>
+      <button type="button" class="hist-subtab" data-htab="mybets" onclick="switchHistSubTab('mybets')">🎟️ Minhas Apostas</button>
+      <button type="button" class="hist-subtab" data-htab="styles" onclick="switchHistSubTab('styles')">🦓 Zebras & Estilos</button>
+      <button type="button" class="hist-subtab" data-htab="all" onclick="switchHistSubTab('all')">🌎 Ver Tudo</button>
+    </div>
+
     <!-- PERFORMANCE HISTÓRICA ─────────────── -->
-    <div class="section" style="margin-top: 24px;">
+    <div class="section" data-hist-group="overview" style="margin-top: 20px;">
       <div class="section-header">
         <span class="section-icon">📈</span>
         <div>
@@ -225,7 +241,7 @@
     </div>
 
     <!-- PALPITES TOTAIS ────────────────────── -->
-    <div class="section">
+    <div class="section" data-hist-group="events" style="display:none">
       <div class="section-header">
         <span class="section-icon">📋</span>
         <div>
@@ -236,8 +252,20 @@
       <div id="all-picks-container"></div>
     </div>
 
+    <!-- MINHAS APOSTAS SALVAS ─────────────── -->
+    <div class="section" data-hist-group="mybets" id="my-bets-section" style="display:none">
+      <div class="section-header">
+        <span class="section-icon">🎟️</span>
+        <div>
+          <div class="section-title">Histórico Pessoal — Minhas Apostas</div>
+          <div class="section-sub">Palpites salvos no seu bilhete com apuração automática de Green/Red quando os resultados entram</div>
+        </div>
+      </div>
+      <div id="my-bets-history-container"></div>
+    </div>
+
     <!-- ROI SIMULATOR ──────────────────────── -->
-    <div class="section">
+    <div class="section" data-hist-group="overview">
       <div class="section-header">
         <span class="section-icon">💰</span>
         <div>
@@ -263,7 +291,7 @@
     </div>
 
     <!-- ODDS CATEGORIES (PICKS) ───────────── -->
-    <div class="section">
+    <div class="section" data-hist-group="overview">
       <div class="section-header">
         <span class="section-icon">📋</span>
         <div>
@@ -275,7 +303,7 @@
     </div>
 
     <!-- ZEBRA DETECTOR ──────────────────────── -->
-    <div class="section">
+    <div class="section" data-hist-group="styles" style="display:none">
       <div class="section-header">
         <span class="section-icon">🦓</span>
         <div>
@@ -294,7 +322,7 @@
     </div>
 
     <!-- GRAPPLERS VS STRIKERS ──────────────── -->
-    <div class="section">
+    <div class="section" data-hist-group="styles" style="display:none">
       <div class="section-header">
         <span class="section-icon">🥋</span>
         <div>
@@ -317,13 +345,15 @@
      ══════════════════════════════════════════ -->
 <div class="modal-overlay" id="fighter-modal">
   <div class="modal-card">
-    <div class="modal-title">✏️ Editar / Cadastrar Lutador</div>
+    <div class="modal-title">🥊 Raio-X & Ficha do Lutador</div>
     <div class="modal-sub">
-      Preencha as informações do lutador. Os dados serão salvos localmente e aplicados aos cálculos imediatamente.
+      Histórico no UFC, Rating Elo e sequência recente. Você também pode editar medidas e salvá-las localmente.
     </div>
 
     <div class="modal-label">Nome do Lutador</div>
     <input class="modal-input" id="fighter-name" type="text" readonly style="background:rgba(255,255,255,0.02);color:var(--text2);cursor:not-allowed">
+
+    <div id="fighter-profile-summary" class="fighter-profile-summary"></div>
 
     <div class="two-col">
       <div>
@@ -400,11 +430,11 @@
 <!-- ══════════════════════════════════════════
      SCRIPTS (ordem importa!)
      ══════════════════════════════════════════ -->
-<script src="js/fighters-db.js?v=8"></script>
-<script src="js/events-db.js?v=8"></script>
-<script src="js/analyzer.js?v=8"></script>
-<script src="js/ai-integration.js?v=8"></script>
-<script src="js/app.js?v=8"></script>
+<script src="js/fighters-db.js?v=9"></script>
+<script src="js/events-db.js?v=9"></script>
+<script src="js/analyzer.js?v=9"></script>
+<script src="js/ai-integration.js?v=9"></script>
+<script src="js/app.js?v=9"></script>
 
 </body>
 </html>

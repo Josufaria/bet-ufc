@@ -1,34 +1,8 @@
 /**
  * 🥊 UFC BET ANALYZER — LÓGICA PRINCIPAL
- *
- * Configuração:
- *   SHEET_ID  → ID da sua planilha Google Sheets (parte da URL)
- *   API_KEY   → Chave gratuita da Google Sheets API
- *
- * Como obter sua API Key GRATUITAMENTE:
- *   1. Acesse: https://console.cloud.google.com/
- *   2. Crie um projeto (ex: "UFC Analyzer")
- *   3. Ative a "Google Sheets API" em APIs & Serviços
- *   4. Vá em "Credenciais" → "Criar credenciais" → "Chave de API"
- *   5. Copie a chave e cole abaixo (ou use o botão ⚙️ no site)
- *
- * Como deixar a planilha pública:
- *   Sheets → Compartilhar → Qualquer pessoa com o link → Visualizador
+ * Base local instantânea (121 eventos + 4.287 lutadores) com sync ao vivo ESPN/Odds API.
  */
 
-// ── CONFIGURAÇÃO ────────────────────────────────────────────────
-// Forçar a migração de cache do localStorage para a nova planilha com 96 abas corretas do usuário
-if (!localStorage.getItem('ufc_sheet_migrated_v5')) {
-  localStorage.setItem('ufc_sheet_id', '10YBrQnIKr8x3VG2qzO4jT0TJe5xOedOxQA0TKMc_1PE');
-  localStorage.setItem('ufc_sheet_migrated_v5', 'true');
-}
-
-let CFG = {
-  SHEET_ID: localStorage.getItem('ufc_sheet_id') || '10YBrQnIKr8x3VG2qzO4jT0TJe5xOedOxQA0TKMc_1PE',
-};
-
-const BASE = () => `/api/sheets-proxy`;
-const IGNORAR = ['🗃️ Lutadores','📊 Ref. Odds','🏆 Ranking','💰 Bankroll','📈 Evolução','🎯 Por Odds','🥊 Por Lutador'];
 const NULO    = ['NC','NO CONTEST','DRAW','EMPATE','SEM CONTEST'];
 
 // ── ESTADO GLOBAL ────────────────────────────────────────────────
@@ -37,11 +11,16 @@ let _lutadores = {};
 let _tipsters  = [];
 let _zebraStats = {};
 let _currentTab = 'futuros';
+let _currentHistSubTab = 'overview';
 let _cardFilter = { search: '', quick: 'all' };
 let _myTickets = {};
+let _myBetsHistory = [];
 try {
   _myTickets = JSON.parse(localStorage.getItem('ufc_my_tickets_v1') || '{}') || {};
 } catch (e) { _myTickets = {}; }
+try {
+  _myBetsHistory = JSON.parse(localStorage.getItem('ufc_my_bets_history_v1') || '[]') || [];
+} catch (e) { _myBetsHistory = []; }
 
 window._espnApiAvailable = true;
 
@@ -112,28 +91,6 @@ window._processEspnQueue = async function() {
 
 // Charts
 let _roiChart = null, _compareChart = null, _styleChart = null;
-
-// ── API HELPERS ──────────────────────────────────────────────────
-async function api(path) {
-  const url = `/api/sheets-proxy?path=${encodeURIComponent(path)}`;
-  const r = await fetch(url);
-  if (!r.ok) {
-    const t = await r.text().catch(() => '');
-    throw new Error(`HTTP ${r.status}: ${t.substring(0, 300)}`);
-  }
-  return r.json();
-}
-
-async function batchGetChunked(sheets, size = 8) {
-  const all = [];
-  for (let i = 0; i < sheets.length; i += size) {
-    const chunk = sheets.slice(i, i + size);
-    const qs = chunk.map(s => `ranges=${encodeURIComponent(s)}!A1:Z120`).join('&');
-    const batch = await api(`/values:batchGet?${qs}`);
-    (batch.valueRanges || []).forEach((vr, j) => all.push({ nome: chunk[j], values: vr.values || [] }));
-  }
-  return all;
-}
 
 // ── CARREGAMENTO INSTANTÂNEO + SINCRONIZAÇÃO EM BACKGROUND ───────
 function hydrateFightersStylesFromDb() {
@@ -483,12 +440,84 @@ async function syncEspnInBackground() {
     renderROICompare(stats);
     renderApostasROI();
     renderAllPicks();
+    renderMyBetsHistory();
     renderOddsCats();
     renderOddsCatsGeral();
     populateEventSelector(_currentTab);
     setSyncStatus(`🟢 ESPN ao vivo (${espnEvents.length} cards)`, 'ok');
   } else {
     setSyncStatus(`⚡ Base Local (${_eventos.length} eventos)`, 'local');
+  }
+
+  await syncLiveOddsInBackground();
+}
+
+function normOddName(s) {
+  return String(s || '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+async function syncLiveOddsInBackground() {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), 3000);
+  try {
+    const r = await fetch('/api/get-mma-odds', { signal: ctrl.signal });
+    const ct = r.headers.get('content-type') || '';
+    if (!r.ok || !ct.includes('application/json')) return;
+    const json = await r.json();
+    if (!json.success || !Array.isArray(json.matchups) || json.matchups.length === 0) return;
+
+    let changed = 0;
+    const futureEvents = _eventos.filter(e => e.isFuturo);
+    for (const ev of futureEvents) {
+      for (const c of (ev.cardLutas || [])) {
+        const nV = normOddName(c.fV);
+        const nA = normOddName(c.fA);
+        const lV = nV.split(' ').pop();
+        const lA = nA.split(' ').pop();
+        const match = json.matchups.find(m => {
+          const mA = normOddName(m.fighterA);
+          const mB = normOddName(m.fighterB);
+          return ((mA === nV || mA.endsWith(lV)) && (mB === nA || mB.endsWith(lA))) ||
+                 ((mA === nA || mA.endsWith(lA)) && (mB === nV || mB.endsWith(lV)));
+        });
+        if (!match) continue;
+
+        const direct = normOddName(match.fighterA) === nV || normOddName(match.fighterA).endsWith(lV);
+        const newOV = direct ? match.oddA : match.oddB;
+        const newOA = direct ? match.oddB : match.oddA;
+        const newOpenV = direct ? match.openOddA : match.openOddB;
+        const newOpenA = direct ? match.openOddB : match.openOddA;
+
+        if (newOV && newOV > 1.01 && (!c.oV || Math.abs(c.oV - newOV) >= 0.02)) {
+          c.oV = newOV;
+          ev.oddCard[c.fV.toLowerCase()] = newOV;
+          changed++;
+        }
+        if (newOA && newOA > 1.01 && (!c.oA || Math.abs(c.oA - newOA) >= 0.02)) {
+          c.oA = newOA;
+          ev.oddCard[c.fA.toLowerCase()] = newOA;
+          changed++;
+        }
+        if (newOpenV) c.openOV = newOpenV;
+        if (newOpenA) c.openOA = newOpenA;
+      }
+      if (changed > 0) ev.punterAnalise = [];
+    }
+
+    if (changed > 0) {
+      ensureAllEventsAnalyzed();
+      renderEvento();
+      setSyncStatus(`🟢 ESPN + Odds (${json.source})`, 'ok');
+    }
+  } catch (e) {
+    // falha silenciosa: base local / ESPN segue ativa
+  } finally {
+    clearTimeout(t);
   }
 }
 
@@ -641,160 +670,6 @@ function integrateEspnEvents(espnEvents) {
       });
     }
   });
-}
-
-// ── PARSE LUTADORES ───────────────────────────────────────────────
-function parseLutadores(rows) {
-  for (let i = 2; i < rows.length; i++) {
-    const name  = String(rows[i][0] || '').trim().toLowerCase();
-    const style = String(rows[i][1] || '').trim();
-    if (!name || !style) continue;
-    _lutadores[name] = style;
-    const last = name.split(' ').pop();
-    if (last.length > 3) _lutadores[last] = style;
-  }
-}
-
-// ── PARSE EVENTO ─────────────────────────────────────────────────
-function parseEvento(nome, d) {
-  if (!d || !d.length) return;
-  const dataEvento = String(d[0]?.[0] || '');
-
-  const cardLutas = [], oddCard = {};
-  const lutas = [];
-  const punterAnalise = [];
-  let apostas = null;
-
-  let r = 0;
-  while (r < d.length) {
-    const row = d[r] || [];
-    const firstCell = String(row[0] || '').trim().toUpperCase();
-    const secondCell = String(row[1] || '').trim().toUpperCase();
-
-    // 1. CARD DE LUTAS
-    if (firstCell.includes('CARD DE LUTAS')) {
-      r++; // Pular o título
-      // Pular cabeçalhos se houver (Lutador V, Odd V...)
-      if (r < d.length && String(d[r]?.[0] || '').includes('Lutador')) r++;
-      
-      while (r < d.length) {
-        const cRow = d[r] || [];
-        const fV = String(cRow[0] || '').trim();
-        const fA = String(cRow[4] || '').trim();
-        
-        // Se a linha estiver vazia ou começar outra seção (como RESULTADO REAL), sair deste loop
-        if (!fV && !fA) break;
-        if (fV.toUpperCase().includes('RESULTADO') || String(cRow[1] || '').toUpperCase().includes('RESULTADO')) break;
-        if (fV.toUpperCase() === 'LUTA') break;
-
-        const oV = parseFloat(String(cRow[1] || '').replace(',', '.'));
-        const oA = parseFloat(String(cRow[3] || '').replace(',', '.'));
-
-        if (fV && !isNaN(oV)) oddCard[fV.toLowerCase()] = oV;
-        if (fA && !isNaN(oA)) oddCard[fA.toLowerCase()] = oA;
-        cardLutas.push({ fV, oV: isNaN(oV) ? null : oV, fA, oA: isNaN(oA) ? null : oA });
-        r++;
-      }
-      continue;
-    }
-
-    // 2. RESULTADO REAL
-    if (firstCell.includes('RESULTADO REAL') || secondCell.includes('RESULTADO REAL')) {
-      r++; // Pular título
-      const hdr = d[r] || [];
-      const tipCol = {};
-      _tipsters.forEach(t => {
-        const ci = hdr.findIndex(c => String(c).trim() === t.trim());
-        if (ci >= 0) tipCol[t] = ci;
-      });
-      r++; // Pular cabeçalho
-      
-      while (r < d.length) {
-        const rRow = d[r] || [];
-        const luta = String(rRow[0] || '').trim();
-        if (!luta || luta.toUpperCase().includes('PUNTERMIND')) break;
-        if (luta.toUpperCase().includes('ACERTOS') || luta.toUpperCase().includes('% ACERTO')) break;
-
-        const resultado = String(rRow[1] || '').trim();
-        const picks = {};
-        _tipsters.forEach(t => { if (tipCol[t] !== undefined) picks[t] = String(rRow[tipCol[t]] || '').trim(); });
-        
-        lutas.push({ luta, resultado, metReal: String(rRow[2] || '').trim(), picks });
-        r++;
-      }
-      continue;
-    }
-
-    // 3. PUNTERMIND ANÁLISE PROFUNDA
-    if (firstCell.includes('PUNTERMIND') || secondCell.includes('PUNTERMIND')) {
-      r++; // Pular título
-      // Pular cabeçalho se houver (Luta, Fisico/Matchup)
-      if (r < d.length && String(d[r]?.[0] || '').includes('Luta')) r++;
-
-      while (r < d.length) {
-        const pRow = d[r] || [];
-        const luta = String(pRow[0] || '').trim();
-        if (!luta || luta.toUpperCase().includes('APOSTAS')) break;
-        if (luta.toUpperCase() === 'TIPO') break;
-
-        const evStr = String(pRow[4] || '').trim() || String(pRow[3] || '').trim(); // Fallback dependendo da coluna
-        const pick = String(pRow[5] || '').trim() || String(pRow[4] || '').trim();
-        
-        punterAnalise.push({
-          luta,
-          fisico:   String(pRow[1] || '').trim(),
-          probImp:  String(pRow[2] || '').trim(),
-          probReal: String(pRow[3] || '').trim(),
-          ev: evStr,
-          pick,
-          met:  String(pRow[6] || '').trim(),
-          nota: String(pRow[7] || '').trim()
-        });
-        r++;
-      }
-      continue;
-    }
-
-    // 4. APOSTAS SUGERIDAS
-    if (firstCell.includes('APOSTAS SUGERIDAS') || secondCell.includes('MELHORES APOSTAS') || firstCell.includes('MELHORES APOSTAS')) {
-      r++; // Pular título
-      if (r < d.length && String(d[r]?.[0] || '').toUpperCase().includes('TIPO')) r++;
-      
-      const s = d[r] || [], db = d[r + 1] || [], tr = d[r + 2] || [];
-      const hasReal = (s[1] && s[1] !== 'Melhor pick EV+ da noite') || db[1] || tr[1];
-      const sanitizeOdd = (val) => {
-        let v = String(val).trim();
-        if (v.endsWith('%')) {
-          const num = parseFloat(v.replace('%', ''));
-          if (!isNaN(num)) return (num / 100).toFixed(2);
-        }
-        if (/^0\d\.\d+$/.test(v)) return parseFloat(v).toFixed(2); // Fix "03.04" -> "3.04"
-        const num = parseFloat(v.replace(',', '.'));
-        if (!isNaN(num) && num > 0) return num.toFixed(2);
-        return v;
-      };
-
-      if (hasReal) {
-        apostas = {
-          simples: { tipo: String(s[0] || ''), selecao: String(s[1] || ''), odd: sanitizeOdd(s[2]), nota: String(s[3] || '') },
-          dupla:   { tipo: String(db[0] || ''), selecao: String(db[1] || ''), odd: sanitizeOdd(db[2]), nota: String(db[3] || '') },
-          tripla:  { tipo: String(tr[0] || ''), selecao: String(tr[1] || ''), odd: sanitizeOdd(tr[2]), nota: String(tr[3] || '') },
-        };
-      }
-      r += 3;
-      continue;
-    }
-
-    r++;
-  }
-
-  const evObj = { nome, dataEvento, cardLutas, lutas, punterAnalise, apostas, oddCard };
-  
-  // Determina se é evento futuro validando se nenhuma luta possui um resultado válido
-  const validResults = evObj.lutas.filter(l => l.resultado && l.resultado.trim() !== '' && l.resultado.trim() !== '?');
-  evObj.isFuturo = evObj.lutas.length === 0 || validResults.length === 0;
-  
-  _eventos.push(evObj);
 }
 
 // ── HELPERS ──────────────────────────────────────────────────────
@@ -1063,6 +938,7 @@ function renderAll() {
   renderROICompare(stats);
   renderApostasROI();
   renderAllPicks();
+  if (typeof renderMyBetsHistory === 'function') renderMyBetsHistory();
   // renderCompareChart moved to switchTab
   renderOddsCats();
   renderOddsCatsGeral();
@@ -1070,7 +946,7 @@ function renderAll() {
 }
 
 function renderEmpty() {
-  document.getElementById('loading').innerHTML = '<div class="empty"><div class="empty-icon">📭</div>Nenhum evento encontrado na planilha.</div>';
+  document.getElementById('loading').innerHTML = '<div class="empty"><div class="empty-icon">📭</div>Nenhum evento encontrado.</div>';
 }
 
 // ── KPIs ─────────────────────────────────────────────────────────
@@ -1446,6 +1322,10 @@ function saveMyTickets() {
   try { localStorage.setItem('ufc_my_tickets_v1', JSON.stringify(_myTickets)); } catch (e) {}
 }
 
+function saveMyBetsHistory() {
+  try { localStorage.setItem('ufc_my_bets_history_v1', JSON.stringify(_myBetsHistory)); } catch (e) {}
+}
+
 function getTicketKey(evName, fV, fA) {
   return `${evName}::${fV} vs ${fA}`;
 }
@@ -1454,19 +1334,28 @@ function toggleMyPick(evName, fV, fA, pick, odd, isZebra, evVal) {
   const key = getTicketKey(evName, fV, fA);
   if (_myTickets[key] && _myTickets[key].pick === pick) {
     delete _myTickets[key];
+    _myBetsHistory = _myBetsHistory.filter(b => b.key !== key);
   } else {
-    _myTickets[key] = {
+    const entry = {
+      key,
       eventName: evName,
       fightLabel: `${fV} vs ${fA}`,
       pick,
       odd: Number(odd) || null,
       isZebra: Boolean(isZebra),
-      ev: Number(evVal) || 0
+      ev: Number(evVal) || 0,
+      createdAt: new Date().toISOString()
     };
+    _myTickets[key] = entry;
+    const existingIdx = _myBetsHistory.findIndex(b => b.key === key);
+    if (existingIdx >= 0) _myBetsHistory[existingIdx] = entry;
+    else _myBetsHistory.unshift(entry);
   }
   saveMyTickets();
+  saveMyBetsHistory();
   renderEvento();
   renderMyTicketBar();
+  renderMyBetsHistory();
 }
 
 function removeMyPick(key) {
@@ -1481,6 +1370,147 @@ function clearMyTickets() {
   saveMyTickets();
   renderEvento();
   renderMyTicketBar();
+}
+
+function removeBetFromHistory(key) {
+  _myBetsHistory = _myBetsHistory.filter(b => b.key !== key);
+  delete _myTickets[key];
+  saveMyTickets();
+  saveMyBetsHistory();
+  renderEvento();
+  renderMyTicketBar();
+  renderMyBetsHistory();
+}
+
+function clearMyBetsHistory() {
+  _myBetsHistory = [];
+  saveMyBetsHistory();
+  renderMyBetsHistory();
+}
+
+function copyMyTicketToClipboard() {
+  const entries = Object.entries(_myTickets);
+  if (!entries.length) return '';
+
+  const validOdds = entries.map(([, t]) => t.odd).filter(o => o && o > 1);
+  const parlayOdd = validOdds.length > 0 ? validOdds.reduce((acc, o) => acc * o, 1) : null;
+  const baseStake = parseFloat(document.getElementById('bk-base-stake')?.value) || 100;
+  const currency = document.getElementById('bk-currency')?.value || 'R$';
+
+  const lines = [
+    `🥊 *Meu Bilhete UFC Bet Analyzer* (${entries.length} ${entries.length === 1 ? 'seleção' : 'seleções'})`,
+    ''
+  ];
+  entries.forEach(([, t], i) => {
+    const oddTxt = t.odd ? ` @ ${t.odd.toFixed(2)}` : '';
+    const zebraTxt = t.isZebra ? ' 🦓' : '';
+    lines.push(`${i + 1}. *${t.pick}*${oddTxt}${zebraTxt} (${t.fightLabel} · ${t.eventName})`);
+  });
+  if (parlayOdd) {
+    lines.push('');
+    lines.push(`📊 Odd Múltipla: *${parlayOdd.toFixed(2)}x*`);
+    lines.push(`💰 Stake Base: ${currency} ${baseStake.toFixed(2)} → Retorno: *${currency} ${(baseStake * parlayOdd).toFixed(2)}*`);
+  }
+
+  const text = lines.join('\n');
+  window._lastCopiedTicketText = text;
+  if (typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).catch(() => {});
+  }
+  const btn = document.getElementById('copy-ticket-btn');
+  if (btn) {
+    const old = btn.textContent;
+    btn.textContent = '✅ Copiado!';
+    setTimeout(() => { btn.textContent = old; }, 2000);
+  }
+  return text;
+}
+
+function evaluateMyBetsHistory() {
+  let greens = 0, reds = 0, pendentes = 0, roiUnits = 0;
+  const rows = _myBetsHistory.map(item => {
+    const ev = _eventos.find(e => e.nome === item.eventName);
+    const odd = Number(item.odd) || 1.90;
+    let status = 'PENDENTE';
+    let lucro = 0;
+
+    if (ev && !ev.isFuturo && item.pick) {
+      const luta = findLuta(ev, item.pick);
+      if (luta && luta.resultado && !NULO.some(x => luta.resultado.toUpperCase().includes(x))) {
+        const pickLast = item.pick.toLowerCase().split(' ').pop();
+        const hit = luta.resultado.toLowerCase().includes(pickLast);
+        status = hit ? 'GREEN' : 'RED';
+        lucro = hit ? (odd - 1) : -1;
+        roiUnits += lucro;
+        if (hit) greens++; else reds++;
+      } else {
+        pendentes++;
+      }
+    } else {
+      pendentes++;
+    }
+
+    return { ...item, odd, status, lucro };
+  });
+
+  const settled = greens + reds;
+  const hitRate = settled > 0 ? +((greens / settled) * 100).toFixed(1) : 0;
+  const roiPct = settled > 0 ? +((roiUnits / settled) * 100).toFixed(1) : 0;
+  return { rows, total: rows.length, settled, greens, reds, pendentes, roiUnits: +roiUnits.toFixed(2), hitRate, roiPct };
+}
+
+function renderMyBetsHistory() {
+  const container = document.getElementById('my-bets-history-container');
+  if (!container) return;
+
+  const summary = evaluateMyBetsHistory();
+  if (!summary.total) {
+    container.innerHTML = `<div class="empty"><div class="empty-icon">🎟️</div>Você ainda não salvou nenhum palpite. Clique em <strong>"Palpitar"</strong> em qualquer card de luta para acompanhar seu ROI pessoal aqui.</div>`;
+    return;
+  }
+
+  const roiCls = summary.roiUnits > 0 ? 'roi-pos' : summary.roiUnits < 0 ? 'roi-neg' : 'roi-neu';
+  const kpiHtml = `
+    <div class="my-bets-summary">
+      <div class="stat-card"><div class="stat-label">Palpites Salvos</div><div class="stat-val" style="color:var(--cyan)">${summary.total}</div><div class="stat-sub">${summary.pendentes} pendentes</div></div>
+      <div class="stat-card"><div class="stat-label">Greens / Reds</div><div class="stat-val"><span style="color:var(--green)">${summary.greens}</span> / <span style="color:var(--red)">${summary.reds}</span></div><div class="stat-sub">${summary.settled} finalizadas</div></div>
+      <div class="stat-card"><div class="stat-label">Acerto Pessoal</div><div class="stat-val" style="color:var(--gold)">${summary.settled ? summary.hitRate + '%' : '—'}</div><div class="stat-sub">Apuração automática</div></div>
+      <div class="stat-card"><div class="stat-label">ROI Pessoal (1u/pick)</div><div class="stat-val ${roiCls}">${summary.roiUnits >= 0 ? '+' : ''}${summary.roiUnits.toFixed(2)}u</div><div class="stat-sub">${summary.settled ? (summary.roiPct >= 0 ? '+' : '') + summary.roiPct + '% yield' : 'Aguardando resultados'}</div></div>
+    </div>
+  `;
+
+  const tableRows = summary.rows.map(b => {
+    const statusBadge = b.status === 'GREEN'
+      ? '<span class="badge badge-win">✅ Green</span>'
+      : b.status === 'RED'
+        ? '<span class="badge badge-ev-n">❌ Red</span>'
+        : '<span style="color:var(--text3);font-size:12px">⏳ Pendente</span>';
+    const lucroTxt = b.status === 'PENDENTE'
+      ? '—'
+      : `<span class="${b.lucro >= 0 ? 'roi-pos' : 'roi-neg'}">${b.lucro >= 0 ? '+' : ''}${b.lucro.toFixed(2)}u</span>`;
+    return `<tr>
+      <td style="font-size:12px;color:var(--text2)">${escHtml(b.eventName)}</td>
+      <td style="font-weight:600">${escHtml(b.fightLabel)}</td>
+      <td style="color:var(--gold);font-weight:700">🥊 ${escHtml(b.pick)}</td>
+      <td>${b.odd.toFixed(2)}</td>
+      <td>${statusBadge}</td>
+      <td>${lucroTxt}</td>
+      <td><button type="button" class="ticket-chip-rm" onclick="removeBetFromHistory('${escHtml(b.key).replace(/'/g, "\\'")}')" title="Remover do histórico">&times;</button></td>
+    </tr>`;
+  }).join('');
+
+  container.innerHTML = `
+    ${kpiHtml}
+    <div style="display:flex;justify-content:flex-end;margin-bottom:10px">
+      <button type="button" class="ticket-clear-btn" onclick="clearMyBetsHistory()">Limpar Histórico Pessoal</button>
+    </div>
+    <div class="ev-table-wrap">
+      <table class="odds-cat-table">
+        <thead><tr><th>Evento</th><th>Luta</th><th>Seu Palpite</th><th>Odd</th><th>Status</th><th>Lucro (1u)</th><th></th></tr></thead>
+        <tbody>${tableRows}</tbody>
+      </table>
+    </div>
+  `;
 }
 
 function setQuickFilter(mode) {
@@ -1527,6 +1557,8 @@ function renderMyTicketBar() {
       <div class="ticket-bar-right">
         ${parlayOdd ? `<div class="ticket-stat"><span>Odd Múltipla</span><strong>${parlayOdd.toFixed(2)}x</strong></div>` : ''}
         ${parlayOdd ? `<div class="ticket-stat"><span>Retorno (${currency} ${baseStake})</span><strong style="color:var(--green)">${currency} ${(baseStake * parlayOdd).toFixed(2)}</strong></div>` : ''}
+        <button type="button" id="copy-ticket-btn" class="ticket-action-btn" onclick="copyMyTicketToClipboard()">📋 Copiar Bilhete</button>
+        <button type="button" class="ticket-action-btn" onclick="switchTab('historico'); switchHistSubTab('mybets')">📊 Ver Meu ROI</button>
         <button type="button" class="ticket-clear-btn" onclick="clearMyTickets()">Limpar</button>
       </div>
     </div>
@@ -1571,6 +1603,9 @@ function renderEvento() {
     precision: cardAnalyses.filter(x => x.analysis && x.analysis.isHighPrecisionPick).length,
     ev: cardAnalyses.filter(x => x.analysis && (x.analysis.evA > 0.03 || x.analysis.evB > 0.03)).length,
     zebra: cardAnalyses.filter(x => x.analysis && (x.analysis.zebraAlert || (x.c.oV >= 2.5 || x.c.oA >= 2.5))).length,
+    ko: cardAnalyses.filter(x => x.analysis && /KO|TKO/i.test(x.analysis.predictedMethod || '')).length,
+    sub: cardAnalyses.filter(x => x.analysis && /Sub/i.test(x.analysis.predictedMethod || '')).length,
+    dec: cardAnalyses.filter(x => x.analysis && /Decis/i.test(x.analysis.predictedMethod || '')).length,
     ticket: cardAnalyses.filter(x => x.hasTicket).length
   };
   document.querySelectorAll('.qf-btn').forEach(btn => {
@@ -1592,6 +1627,15 @@ function renderEvento() {
     }
     if (_cardFilter.quick === 'zebra') {
       return Boolean(analysis && (analysis.zebraAlert || c.oV >= 2.5 || c.oA >= 2.5));
+    }
+    if (_cardFilter.quick === 'ko') {
+      return Boolean(analysis && /KO|TKO/i.test(analysis.predictedMethod || ''));
+    }
+    if (_cardFilter.quick === 'sub') {
+      return Boolean(analysis && /Sub/i.test(analysis.predictedMethod || ''));
+    }
+    if (_cardFilter.quick === 'dec') {
+      return Boolean(analysis && /Decis/i.test(analysis.predictedMethod || ''));
     }
     if (_cardFilter.quick === 'ticket') {
       return hasTicket;
@@ -1823,7 +1867,7 @@ function buildFightCard(c, ev, idx, preAnalysis = null, preDbA = null, preDbB = 
   const aiHtml = `
     <div id="${aiBtnId}-container" style="margin-top: 10px; width: 100%;">
       <button type="button" class="ai-btn-card" onclick="analyzeFightWithAI('${(fV||'').replace(/'/g, "\\'")}', '${(fA||'').replace(/'/g, "\\'")}', '${aiBtnId}-container', '${recPick}')">
-        🤖 Análise Tática IA
+        ⚡ Raio-X Tático
       </button>
     </div>
   `;
@@ -2055,30 +2099,6 @@ function loadDemoData() {
   renderAll();
 }
 
-// ── BANNER AVISO DE DEMO ─────────────────────────────────────────
-function showDemoWarning(errorMsg) {
-  let container = document.getElementById('demo-banner-container');
-  if (!container) {
-    container = document.createElement('div');
-    container.id = 'demo-banner-container';
-    document.body.insertBefore(container, document.body.firstChild);
-  }
-  container.innerHTML = `
-    <div class="demo-banner">
-      <div class="demo-banner-left">
-        <span class="demo-banner-icon">⚠️</span>
-        <span><strong>Modo de Demonstração Ativo</strong>: Não foi possível conectar à sua planilha Google (${escHtml(errorMsg)}). Exibindo dados locais offline.</span>
-      </div>
-      <button class="demo-banner-close" onclick="closeDemoBanner()">✕</button>
-    </div>
-  `;
-}
-
-function closeDemoBanner() {
-  const container = document.getElementById('demo-banner-container');
-  if (container) container.style.display = 'none';
-}
-
 // ── SISTEMA DE ABAS ──────────────────────────────────────────────
 function switchTab(tabId) {
   _currentTab = tabId;
@@ -2097,6 +2117,8 @@ function switchTab(tabId) {
     if (typeof renderROIChart === 'function') renderROIChart(stats);
     if (typeof renderCompareChart === 'function') renderCompareChart(stats);
     if (typeof renderStyleStats === 'function') renderStyleStats();
+    renderMyBetsHistory();
+    switchHistSubTab(_currentHistSubTab || 'overview');
   }
   
   // Alternar exibições de conteúdo
@@ -2107,6 +2129,20 @@ function switchTab(tabId) {
   if (contentHistorico) contentHistorico.style.display = tabId === 'historico' ? 'block' : 'none';
   
   populateEventSelector(tabId);
+}
+
+function switchHistSubTab(subTab) {
+  _currentHistSubTab = subTab || 'overview';
+  document.querySelectorAll('.hist-subtab').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.htab === _currentHistSubTab);
+  });
+  document.querySelectorAll('[data-hist-group]').forEach(sec => {
+    const grp = sec.dataset.histGroup;
+    sec.style.display = (_currentHistSubTab === 'all' || grp === _currentHistSubTab) ? 'block' : 'none';
+  });
+  if (_currentHistSubTab === 'mybets') {
+    renderMyBetsHistory();
+  }
 }
 
 function populateEventSelector(tabId) {
@@ -2409,12 +2445,142 @@ function updateStakesCalculator() {
 // ── BANCO DINÂMICO DE LUTADORES (MODAL & SALVAMENTO) ─────────────
 let _currentEditingFighter = null;
 
+function renderFighterProfileSummary(name, data) {
+  const sumEl = document.getElementById('fighter-profile-summary');
+  if (!sumEl) return;
+
+  const norm = normOddName(name);
+  const elo = Math.round((window._fighterElo && window._fighterElo[norm]) || 1500);
+  const streak = (window._fighterStreak && window._fighterStreak[norm]) || 0;
+  const streakTxt = streak > 0 ? `+${streak}W` : streak < 0 ? `${streak}L` : '0';
+  const rec = (data && data.wins != null && data.losses != null)
+    ? `${data.wins}-${data.losses}${data.draws ? '-' + data.draws : ''}`
+    : '—';
+  const styleTxt = (data && data.style) || 'MMA';
+  const koSubTxt = (data && (data.ko_wins || data.sub_wins))
+    ? `${data.ko_wins || 0} KO · ${data.sub_wins || 0} SUB`
+    : '—';
+
+  const fights = [];
+  const lastTok = norm.split(' ').pop();
+  for (const ev of _eventos) {
+    for (const c of (ev.cardLutas || [])) {
+      const nV = normOddName(c.fV);
+      const nA = normOddName(c.fA);
+      const isV = nV === norm || (lastTok.length > 3 && nV.endsWith(' ' + lastTok));
+      const isA = nA === norm || (lastTok.length > 3 && nA.endsWith(' ' + lastTok));
+      if (!isV && !isA) continue;
+      const opp = isV ? c.fA : c.fV;
+      const myOdd = isV ? c.oV : c.oA;
+      const lutaRes = findLuta(ev, name);
+      let statusBadge = '<span style="color:var(--gold)">⏳ Agendada</span>';
+      if (!ev.isFuturo && lutaRes && lutaRes.resultado) {
+        const resNorm = normOddName(lutaRes.resultado);
+        const won = resNorm === norm || (lastTok.length > 3 && resNorm.includes(lastTok));
+        statusBadge = won
+          ? '<span style="color:var(--green);font-weight:700">✅ Vitória</span>'
+          : '<span style="color:var(--red);font-weight:700">❌ Derrota</span>';
+      }
+      fights.push({
+        evento: ev.nome,
+        data: ev.dataEvento || '',
+        opp,
+        odd: myOdd ? `@${Number(myOdd).toFixed(2)}` : '',
+        statusBadge
+      });
+    }
+  }
+
+  const historyHtml = fights.length
+    ? fights.slice(0, 8).map(f => `
+        <div class="fp-fight-row">
+          <span><strong>vs ${escHtml(f.opp)}</strong> <small style="color:var(--text3)">(${escHtml(f.evento)}${f.data ? ' · ' + escHtml(f.data) : ''})</small></span>
+          <span>${f.odd ? `<small style="color:var(--cyan);margin-right:6px">${f.odd}</small>` : ''}${f.statusBadge}</span>
+        </div>
+      `).join('')
+    : '<div style="font-size:12px;color:var(--text3)">Sem lutas registradas nos 121 cards da base.</div>';
+
+  sumEl.innerHTML = `
+    <div class="fp-kpis">
+      <div class="fp-kpi"><span>Rating Elo</span><strong style="color:var(--cyan)">${elo}</strong></div>
+      <div class="fp-kpi"><span>Sequência</span><strong>${streakTxt}</strong></div>
+      <div class="fp-kpi"><span>Cartel</span><strong>${escHtml(rec)}</strong></div>
+      <div class="fp-kpi"><span>Estilo</span><strong>${escHtml(styleTxt)}</strong></div>
+      <div class="fp-kpi"><span>Via Rápida</span><strong>${escHtml(koSubTxt)}</strong></div>
+    </div>
+    <div class="fp-history-title">📜 Histórico no UFC (${fights.length} ${fights.length === 1 ? 'luta encontrada' : 'lutas encontradas'})</div>
+    <div class="fp-history-list">${historyHtml}</div>
+  `;
+}
+
+function searchGlobalFighters(query) {
+  const drop = document.getElementById('global-fighter-dropdown');
+  if (!drop) return [];
+  const q = normOddName(query);
+  if (q.length < 2) {
+    drop.style.display = 'none';
+    drop.innerHTML = '';
+    return [];
+  }
+
+  const results = [];
+  const seen = new Set();
+  if (typeof FIGHTERS_DB === 'object' && FIGHTERS_DB) {
+    for (const [k, info] of Object.entries(FIGHTERS_DB)) {
+      if (k.includes(q)) {
+        const displayName = (info && info.name) || k.replace(/\b\w/g, ch => ch.toUpperCase());
+        const elo = Math.round((window._fighterElo && window._fighterElo[k]) || 1500);
+        const rec = (info && info.wins != null && info.losses != null) ? `${info.wins}-${info.losses}` : '';
+        results.push({ name: displayName, style: info?.style || 'MMA', rec, elo });
+        seen.add(k);
+        if (results.length >= 8) break;
+      }
+    }
+  }
+
+  if (results.length < 8) {
+    for (const ev of _eventos) {
+      for (const c of (ev.cardLutas || [])) {
+        for (const fName of [c.fV, c.fA]) {
+          const nk = normOddName(fName);
+          if (!nk || seen.has(nk) || !nk.includes(q)) continue;
+          const db = typeof getFighterData === 'function' ? getFighterData(fName) : null;
+          const elo = Math.round((window._fighterElo && window._fighterElo[nk]) || 1500);
+          results.push({ name: fName, style: db?.style || 'MMA', rec: db?.wins != null ? `${db.wins}-${db.losses}` : '', elo });
+          seen.add(nk);
+          if (results.length >= 8) break;
+        }
+        if (results.length >= 8) break;
+      }
+      if (results.length >= 8) break;
+    }
+  }
+
+  if (!results.length) {
+    drop.innerHTML = '<div class="gf-item" style="color:var(--text3);cursor:default">Nenhum lutador encontrado.</div>';
+    drop.style.display = 'block';
+    return [];
+  }
+
+  drop.innerHTML = results.map(r => `
+    <button type="button" class="gf-item" data-gf-name="${escHtml(r.name)}">
+      <strong>🥊 ${escHtml(r.name)}</strong>
+      <span class="gf-item-meta">${escHtml(r.style)}${r.rec ? ' · ' + escHtml(r.rec) : ''} · Elo ${r.elo}</span>
+    </button>
+  `).join('');
+  drop.style.display = 'block';
+  return results;
+}
+
 function openFighterModal(name) {
   _currentEditingFighter = name;
+  const drop = document.getElementById('global-fighter-dropdown');
+  if (drop) drop.style.display = 'none';
   const nameInput = document.getElementById('fighter-name');
   if (nameInput) nameInput.value = name;
 
   const data = getFighterData(name);
+  renderFighterProfileSummary(name, data);
   const hInput = document.getElementById('fighter-height');
   const rInput = document.getElementById('fighter-reach');
   const stInput = document.getElementById('fighter-stance');
@@ -2487,11 +2653,27 @@ document.addEventListener('DOMContentLoaded', () => {
     searchEl.addEventListener('input', e => setCardSearch(e.target.value));
   }
 
+  const globalSearchEl = document.getElementById('global-fighter-input');
+  if (globalSearchEl) {
+    globalSearchEl.addEventListener('input', e => searchGlobalFighters(e.target.value));
+  }
+
   loadData();
 });
 
 // Event listeners centralizados (modal de lutador + palpites + bilhete)
 document.addEventListener('click', e => {
+  const gfBtn = e.target.closest('.gf-item[data-gf-name]');
+  if (gfBtn) {
+    openFighterModal(gfBtn.dataset.gfName);
+    return;
+  }
+
+  const drop = document.getElementById('global-fighter-dropdown');
+  if (drop && !e.target.closest('.global-fighter-search-wrap')) {
+    drop.style.display = 'none';
+  }
+
   const editBtn = e.target.closest('.fc-edit-btn');
   if (editBtn) {
     openFighterModal(editBtn.dataset.fighter);
