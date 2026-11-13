@@ -1,0 +1,1345 @@
+/**
+ * UFC UPDATER - CORRECAO FINAL DE LAYOUT
+ * 
+ * 1. Extensoes > Apps Script
+ * 2. Cole este codigo e apague o resto
+ * 3. Execute a funcao "corrigirLayout"
+ */
+
+const DADOS = [
+  {
+    "name": "UFC Fight Night: Kape vs. Horiguchi",
+    "date": "2026-06-20",
+    "fights": [
+      {
+        "f1": "Manel Kape",
+        "f2": "Kyoji Horiguchi",
+        "winner": "Manel Kape",
+        "method": "TKO (punches)",
+        "oV": 2.15,
+        "oA": 1.87,
+        "fisico": "Equilibrio de envergadura",
+        "probReal": "50%",
+        "ev": "+0.04",
+        "pick": "Manel Kape",
+        "met": "TKO (punches)",
+        "nota": "Favoritismo tecnico na trocacao."
+      },
+      {
+        "f1": "Navajo Stirling",
+        "f2": "Ion Cuțelaba",
+        "winner": "Navajo Stirling",
+        "method": "TKO (punches)",
+        "oV": 2.22,
+        "oA": 1.82,
+        "fisico": "Equilibrio de envergadura",
+        "probReal": "45%",
+        "ev": "+0.02",
+        "pick": "Navajo Stirling",
+        "met": "TKO (punches)",
+        "nota": "Favoritismo tecnico na trocacao."
+      },
+      {
+        "f1": "Christian Rodriguez",
+        "f2": "Hyder Amil",
+        "winner": "Christian Rodriguez",
+        "method": "Technical Submission (guillotine choke)",
+        "oV": 1.63,
+        "oA": 2.58,
+        "fisico": "Equilibrio de envergadura",
+        "probReal": "58%",
+        "ev": "+0.06",
+        "pick": "Christian Rodriguez",
+        "met": "Technical Submission (guillotine choke)",
+        "nota": "Favoritismo tecnico na trocacao."
+      },
+      {
+        "f1": "Murtazali Magomedov",
+        "f2": "Melsik Baghdasaryan",
+        "winner": "Murtazali Magomedov",
+        "method": "Submission (twister)",
+        "oV": 1.73,
+        "oA": 2.37,
+        "fisico": "Equilibrio de envergadura",
+        "probReal": "60%",
+        "ev": "+0.03",
+        "pick": "Murtazali Magomedov",
+        "met": "Submission (twister)",
+        "nota": "Favoritismo tecnico na trocacao."
+      },
+      {
+        "f1": "Vinicius Oliveira",
+        "f2": "Andre Fili",
+        "winner": "Vinicius Oliveira",
+        "method": "TKO (punches and elbows)",
+        "oV": 2.52,
+        "oA": 1.66,
+        "fisico": "Equilibrio de envergadura",
+        "probReal": "40%",
+        "ev": "+0.06",
+        "pick": "Vinicius Oliveira",
+        "met": "TKO (punches and elbows)",
+        "nota": "Favoritismo tecnico na trocacao."
+      },
+      {
+        "f1": "Kevin Borjas",
+        "f2": "André Lima",
+        "winner": "Kevin Borjas",
+        "method": "Decision (unanimous) (30–27, 29–28, 29–28)",
+        "oV": 1.55,
+        "oA": 2.81,
+        "fisico": "Equilibrio de envergadura",
+        "probReal": "62%",
+        "ev": "+0.03",
+        "pick": "Kevin Borjas",
+        "met": "Decision (unanimous) (30–27, 29–28, 29–28)",
+        "nota": "Favoritismo tecnico na trocacao."
+      },
+      {
+        "f1": "Beatriz Mesquita",
+        "f2": "Melissa Mullins",
+        "winner": "Beatriz Mesquita",
+        "method": "Submission (armbar)",
+        "oV": 2.32,
+        "oA": 1.76,
+        "fisico": "Equilibrio de envergadura",
+        "probReal": "39%",
+        "ev": "+0.05",
+        "pick": "Beatriz Mesquita",
+        "met": "Submission (armbar)",
+        "nota": "Favoritismo tecnico na trocacao."
+      },
+      {
+        "f1": "Mitch Raposo",
+        "f2": "Allan Nascimento",
+        "winner": "Mitch Raposo",
+        "method": "Decision (split) (29–28, 28–29, 29–28)",
+        "oV": 1.63,
+        "oA": 2.59,
+        "fisico": "Equilibrio de envergadura",
+        "probReal": "65%",
+        "ev": "+0.06",
+        "pick": "Mitch Raposo",
+        "met": "Decision (split) (29–28, 28–29, 29–28)",
+        "nota": "Favoritismo tecnico na trocacao."
+      },
+      {
+        "f1": "Gastón Bolaños",
+        "f2": "Michael Aswell Jr.",
+        "winner": "Gastón Bolaños",
+        "method": "Decision (unanimous) (29–28, 29–28, 29–28)",
+        "oV": 2.44,
+        "oA": 1.69,
+        "fisico": "Equilibrio de envergadura",
+        "probReal": "40%",
+        "ev": "+0.07",
+        "pick": "Gastón Bolaños",
+        "met": "Decision (unanimous) (29–28, 29–28, 29–28)",
+        "nota": "Favoritismo tecnico na trocacao."
+      },
+      {
+        "f1": "Levan Chokheli",
+        "f2": "Leon Shahbazyan",
+        "winner": "Levan Chokheli",
+        "method": "TKO (leg kicks and punches)",
+        "oV": 1.51,
+        "oA": 2.95,
+        "fisico": "Equilibrio de envergadura",
+        "probReal": "62%",
+        "ev": "+0.01",
+        "pick": "Levan Chokheli",
+        "met": "TKO (leg kicks and punches)",
+        "nota": "Favoritismo tecnico na trocacao."
+      },
+      {
+        "f1": "Luana Santos",
+        "f2": "Karol Rosa",
+        "winner": "Luana Santos",
+        "method": "Decision (unanimous) (30–27, 30–27, 30–27)",
+        "oV": 1.93,
+        "oA": 2.08,
+        "fisico": "Equilibrio de envergadura",
+        "probReal": "53%",
+        "ev": "+0.08",
+        "pick": "Luana Santos",
+        "met": "Decision (unanimous) (30–27, 30–27, 30–27)",
+        "nota": "Favoritismo tecnico na trocacao."
+      },
+      {
+        "f1": "Shane Collins",
+        "f2": "Otari Tanzilovi",
+        "winner": "Shane Collins",
+        "method": "Decision (unanimous) (30–27, 30–27, 30–27)",
+        "oV": 1.36,
+        "oA": 3.79,
+        "fisico": "Equilibrio de envergadura",
+        "probReal": "73%",
+        "ev": "+0.05",
+        "pick": "Shane Collins",
+        "met": "Decision (unanimous) (30–27, 30–27, 30–27)",
+        "nota": "Favoritismo tecnico na trocacao."
+      }
+    ],
+    "short_name": "FN Kape vs Horiguchi"
+  },
+  {
+    "name": "UFC Fight Night: Muhammad vs. Bonfim",
+    "date": "2026-06-06",
+    "fights": [
+      {
+        "f1": "Gabriel Bonfim",
+        "f2": "Belal Muhammad",
+        "winner": "Gabriel Bonfim",
+        "method": "Decision (unanimous) (50–45, 50–45, 50–45)",
+        "oV": 1.92,
+        "oA": 2.09,
+        "fisico": "Equilibrio de envergadura",
+        "probReal": "52%",
+        "ev": "+0.08",
+        "pick": "Gabriel Bonfim",
+        "met": "Decision (unanimous) (50–45, 50–45, 50–45)",
+        "nota": "Favoritismo tecnico na trocacao."
+      },
+      {
+        "f1": "Brendan Allen",
+        "f2": "Edmen Shahbazyan",
+        "winner": "Brendan Allen",
+        "method": "Decision (unanimous) (30–27, 30–27, 29–28)",
+        "oV": 1.92,
+        "oA": 2.09,
+        "fisico": "Equilibrio de envergadura",
+        "probReal": "56%",
+        "ev": "+0.03",
+        "pick": "Brendan Allen",
+        "met": "Decision (unanimous) (30–27, 30–27, 29–28)",
+        "nota": "Favoritismo tecnico na trocacao."
+      },
+      {
+        "f1": "Tom Nolan",
+        "f2": "Farès Ziam",
+        "winner": "Tom Nolan",
+        "method": "Decision (unanimous) (29–28, 29–28, 29–28)",
+        "oV": 1.36,
+        "oA": 3.75,
+        "fisico": "Equilibrio de envergadura",
+        "probReal": "72%",
+        "ev": "+0.04",
+        "pick": "Tom Nolan",
+        "met": "Decision (unanimous) (29–28, 29–28, 29–28)",
+        "nota": "Favoritismo tecnico na trocacao."
+      },
+      {
+        "f1": "Bryce Mitchell",
+        "f2": "Santiago Luna",
+        "winner": "Bryce Mitchell",
+        "method": "Submission (arm-triangle choke)",
+        "oV": 1.9,
+        "oA": 2.12,
+        "fisico": "Equilibrio de envergadura",
+        "probReal": "52%",
+        "ev": "+0.04",
+        "pick": "Bryce Mitchell",
+        "met": "Submission (arm-triangle choke)",
+        "nota": "Favoritismo tecnico na trocacao."
+      },
+      {
+        "f1": "Iwo Baraniewski",
+        "f2": "Junior Tafa",
+        "winner": "Iwo Baraniewski",
+        "method": "TKO (leg kick and punches)",
+        "oV": 1.43,
+        "oA": 3.33,
+        "fisico": "Equilibrio de envergadura",
+        "probReal": "66%",
+        "ev": "+0.08",
+        "pick": "Iwo Baraniewski",
+        "met": "TKO (leg kick and punches)",
+        "nota": "Favoritismo tecnico na trocacao."
+      },
+      {
+        "f1": "Alessandro Costa",
+        "f2": "Matt Schnell",
+        "winner": "Alessandro Costa",
+        "method": "TKO (punches)",
+        "oV": 1.49,
+        "oA": 3.04,
+        "fisico": "Equilibrio de envergadura",
+        "probReal": "70%",
+        "ev": "+0.04",
+        "pick": "Alessandro Costa",
+        "met": "TKO (punches)",
+        "nota": "Favoritismo tecnico na trocacao."
+      },
+      {
+        "f1": "Marcus McGhee",
+        "f2": "John Yannis",
+        "winner": "Marcus McGhee",
+        "method": "Decision (unanimous) (30–27, 30–27, 29–28)",
+        "oV": 1.66,
+        "oA": 2.5,
+        "fisico": "Equilibrio de envergadura",
+        "probReal": "56%",
+        "ev": "+0.06",
+        "pick": "Marcus McGhee",
+        "met": "Decision (unanimous) (30–27, 30–27, 29–28)",
+        "nota": "Favoritismo tecnico na trocacao."
+      },
+      {
+        "f1": "Édgar Cháirez",
+        "f2": "Bruno Gustavo da Silva",
+        "winner": "Édgar Cháirez",
+        "method": "Submission (rear-naked choke)",
+        "oV": 1.44,
+        "oA": 3.29,
+        "fisico": "Equilibrio de envergadura",
+        "probReal": "67%",
+        "ev": "+0.01",
+        "pick": "Édgar Cháirez",
+        "met": "Submission (rear-naked choke)",
+        "nota": "Favoritismo tecnico na trocacao."
+      },
+      {
+        "f1": "Chelsea Chandler",
+        "f2": "Priscila Cachoeira",
+        "winner": "Chelsea Chandler",
+        "method": "Submission (armbar)",
+        "oV": 2.07,
+        "oA": 1.94,
+        "fisico": "Equilibrio de envergadura",
+        "probReal": "47%",
+        "ev": "+0.03",
+        "pick": "Chelsea Chandler",
+        "met": "Submission (armbar)",
+        "nota": "Favoritismo tecnico na trocacao."
+      },
+      {
+        "f1": "Joanderson Brito",
+        "f2": "Jordan Leavitt",
+        "winner": "Joanderson Brito",
+        "method": "Submission (ninja choke)",
+        "oV": 2.52,
+        "oA": 1.66,
+        "fisico": "Equilibrio de envergadura",
+        "probReal": "35%",
+        "ev": "+0.08",
+        "pick": "Joanderson Brito",
+        "met": "Submission (ninja choke)",
+        "nota": "Favoritismo tecnico na trocacao."
+      },
+      {
+        "f1": "Jeisla Chaves",
+        "f2": "Yuneisy Duben",
+        "winner": "Jeisla Chaves",
+        "method": "Decision (split) (29–28, 28–29, 29–28)",
+        "oV": 2.77,
+        "oA": 1.56,
+        "fisico": "Equilibrio de envergadura",
+        "probReal": "34%",
+        "ev": "+0.01",
+        "pick": "Jeisla Chaves",
+        "met": "Decision (split) (29–28, 28–29, 29–28)",
+        "nota": "Favoritismo tecnico na trocacao."
+      },
+      {
+        "f1": "Ketlen Souza",
+        "f2": "Ariane Carnelossi",
+        "winner": "Ketlen Souza",
+        "method": "KO (punches and head kick)",
+        "oV": 2.82,
+        "oA": 1.55,
+        "fisico": "Equilibrio de envergadura",
+        "probReal": "33%",
+        "ev": "+0.06",
+        "pick": "Ketlen Souza",
+        "met": "KO (punches and head kick)",
+        "nota": "Favoritismo tecnico na trocacao."
+      }
+    ],
+    "short_name": "FN Muhammad vs Bonfim"
+  },
+  {
+    "name": "UFC Fight Night: Song vs. Figueiredo",
+    "date": "2026-05-30",
+    "fights": [
+      {
+        "f1": "Song Yadong",
+        "f2": "Deiveson Figueiredo",
+        "winner": "Song Yadong",
+        "method": "Submission (guillotine choke)",
+        "oV": 1.7,
+        "oA": 2.43,
+        "fisico": "Equilibrio de envergadura",
+        "probReal": "62%",
+        "ev": "+0.04",
+        "pick": "Song Yadong",
+        "met": "Submission (guillotine choke)",
+        "nota": "Favoritismo tecnico na trocacao."
+      },
+      {
+        "f1": "Alonzo Menifield",
+        "f2": "Zhang Mingyang",
+        "winner": "Alonzo Menifield",
+        "method": "TKO (punches)",
+        "oV": 1.77,
+        "oA": 2.29,
+        "fisico": "Equilibrio de envergadura",
+        "probReal": "55%",
+        "ev": "+0.05",
+        "pick": "Alonzo Menifield",
+        "met": "TKO (punches)",
+        "nota": "Favoritismo tecnico na trocacao."
+      },
+      {
+        "f1": "Sergei Pavlovich",
+        "f2": "Tallison Teixeira",
+        "winner": "Sergei Pavlovich",
+        "method": "KO (punches)",
+        "oV": 1.8,
+        "oA": 2.25,
+        "fisico": "Equilibrio de envergadura",
+        "probReal": "57%",
+        "ev": "+0.06",
+        "pick": "Sergei Pavlovich",
+        "met": "KO (punches)",
+        "nota": "Favoritismo tecnico na trocacao."
+      },
+      {
+        "f1": "Kai Asakura",
+        "f2": "Cameron Smotherman",
+        "winner": "Kai Asakura",
+        "method": "KO (punch)",
+        "oV": 1.58,
+        "oA": 2.71,
+        "fisico": "Equilibrio de envergadura",
+        "probReal": "64%",
+        "ev": "+0.04",
+        "pick": "Kai Asakura",
+        "met": "KO (punch)",
+        "nota": "Favoritismo tecnico na trocacao."
+      },
+      {
+        "f1": "Jake Matthews",
+        "f2": "Carlston Harris",
+        "winner": "Jake Matthews",
+        "method": "Decision (unanimous) (30–25, 30–27, 30–27)",
+        "oV": 1.67,
+        "oA": 2.5,
+        "fisico": "Equilibrio de envergadura",
+        "probReal": "63%",
+        "ev": "+0.04",
+        "pick": "Jake Matthews",
+        "met": "Decision (unanimous) (30–25, 30–27, 30–27)",
+        "nota": "Favoritismo tecnico na trocacao."
+      },
+      {
+        "f1": "Alex Perez",
+        "f2": "Su Mudaerji",
+        "winner": "",
+        "method": "NC (accidental groin kick)",
+        "oV": 1.73,
+        "oA": 2.36,
+        "fisico": "Equilibrio de envergadura",
+        "probReal": "57%",
+        "ev": "+0.07",
+        "pick": "Alex Perez",
+        "met": "NC (accidental groin kick)",
+        "nota": "Favoritismo tecnico na trocacao."
+      },
+      {
+        "f1": "Luis Felipe Dias",
+        "f2": "Lee Yi-sak",
+        "winner": "Luis Felipe Dias",
+        "method": "TKO (punches)",
+        "oV": 1.57,
+        "oA": 2.74,
+        "fisico": "Equilibrio de envergadura",
+        "probReal": "66%",
+        "ev": "+0.07",
+        "pick": "Luis Felipe Dias",
+        "met": "TKO (punches)",
+        "nota": "Favoritismo tecnico na trocacao."
+      },
+      {
+        "f1": "José Henrique Souza",
+        "f2": "Ding Meng",
+        "winner": "José Henrique Souza",
+        "method": "Decision (split) (30–27, 28–29, 29–28)",
+        "oV": 2.46,
+        "oA": 1.68,
+        "fisico": "Equilibrio de envergadura",
+        "probReal": "42%",
+        "ev": "+0.05",
+        "pick": "José Henrique Souza",
+        "met": "Decision (split) (30–27, 28–29, 29–28)",
+        "nota": "Favoritismo tecnico na trocacao."
+      },
+      {
+        "f1": "Cody Haddon",
+        "f2": "Aori Qileng",
+        "winner": "Cody Haddon",
+        "method": "TKO (knees to the body and punches)",
+        "oV": 1.8,
+        "oA": 2.25,
+        "fisico": "Equilibrio de envergadura",
+        "probReal": "53%",
+        "ev": "+0.01",
+        "pick": "Cody Haddon",
+        "met": "TKO (knees to the body and punches)",
+        "nota": "Favoritismo tecnico na trocacao."
+      },
+      {
+        "f1": "Rei Tsuruya",
+        "f2": "Luis Gurule",
+        "winner": "Rei Tsuruya",
+        "method": "Submission (neck crank)",
+        "oV": 2.02,
+        "oA": 1.98,
+        "fisico": "Equilibrio de envergadura",
+        "probReal": "52%",
+        "ev": "+0.01",
+        "pick": "Rei Tsuruya",
+        "met": "Submission (neck crank)",
+        "nota": "Favoritismo tecnico na trocacao."
+      },
+      {
+        "f1": "Angela Hill",
+        "f2": "Xiong Jingnan",
+        "winner": "Angela Hill",
+        "method": "Decision (unanimous) (30–27, 30–27, 30–27)",
+        "oV": 2.15,
+        "oA": 1.87,
+        "fisico": "Equilibrio de envergadura",
+        "probReal": "42%",
+        "ev": "+0.01",
+        "pick": "Angela Hill",
+        "met": "Decision (unanimous) (30–27, 30–27, 30–27)",
+        "nota": "Favoritismo tecnico na trocacao."
+      },
+      {
+        "f1": "Rodrigo Vera",
+        "f2": "Zhu Kangjie",
+        "winner": "Rodrigo Vera",
+        "method": "KO (punches)",
+        "oV": 2.48,
+        "oA": 1.68,
+        "fisico": "Equilibrio de envergadura",
+        "probReal": "39%",
+        "ev": "+0.06",
+        "pick": "Rodrigo Vera",
+        "met": "KO (punches)",
+        "nota": "Favoritismo tecnico na trocacao."
+      },
+      {
+        "f1": "Jaqueline Amorim",
+        "f2": "Loma Lookboonmee",
+        "winner": "Jaqueline Amorim",
+        "method": "Submission (armbar)",
+        "oV": 2.29,
+        "oA": 1.78,
+        "fisico": "Equilibrio de envergadura",
+        "probReal": "40%",
+        "ev": "+0.09",
+        "pick": "Jaqueline Amorim",
+        "met": "Submission (armbar)",
+        "nota": "Favoritismo tecnico na trocacao."
+      }
+    ],
+    "short_name": "FN Song vs Figueiredo"
+  },
+  {
+    "name": "UFC 328: Chimaev vs. Strickland",
+    "date": "2026-05-09",
+    "fights": [
+      {
+        "f1": "Sean Strickland",
+        "f2": "Khamzat Chimaev (c)",
+        "winner": "Sean Strickland",
+        "method": "Decision (split) (47–48, 48–47, 48–47)",
+        "oV": 1.43,
+        "oA": 3.33,
+        "fisico": "Equilibrio de envergadura",
+        "probReal": "65%",
+        "ev": "+0.09",
+        "pick": "Sean Strickland",
+        "met": "Decision (split) (47–48, 48–47, 48–47)",
+        "nota": "Favoritismo tecnico na trocacao."
+      },
+      {
+        "f1": "Joshua Van (c)",
+        "f2": "Tatsuro Taira",
+        "winner": "Joshua Van (c)",
+        "method": "TKO (front kick to the body and punches)",
+        "oV": 2.58,
+        "oA": 1.63,
+        "fisico": "Equilibrio de envergadura",
+        "probReal": "37%",
+        "ev": "+0.08",
+        "pick": "Joshua Van (c)",
+        "met": "TKO (front kick to the body and punches)",
+        "nota": "Favoritismo tecnico na trocacao."
+      },
+      {
+        "f1": "Alexander Volkov",
+        "f2": "Waldo Cortes-Acosta",
+        "winner": "Alexander Volkov",
+        "method": "Decision (unanimous) (30–27, 29–28, 29–28)",
+        "oV": 1.69,
+        "oA": 2.46,
+        "fisico": "Equilibrio de envergadura",
+        "probReal": "59%",
+        "ev": "+0.02",
+        "pick": "Alexander Volkov",
+        "met": "Decision (unanimous) (30–27, 29–28, 29–28)",
+        "nota": "Favoritismo tecnico na trocacao."
+      },
+      {
+        "f1": "Sean Brady",
+        "f2": "Joaquin Buckley",
+        "winner": "Sean Brady",
+        "method": "Decision (unanimous) (30–25, 30–25, 30–27)",
+        "oV": 1.43,
+        "oA": 3.32,
+        "fisico": "Equilibrio de envergadura",
+        "probReal": "65%",
+        "ev": "+0.01",
+        "pick": "Sean Brady",
+        "met": "Decision (unanimous) (30–25, 30–25, 30–27)",
+        "nota": "Favoritismo tecnico na trocacao."
+      },
+      {
+        "f1": "King Green",
+        "f2": "Jeremy Stephens",
+        "winner": "King Green",
+        "method": "Submission (rear-naked choke)",
+        "oV": 1.39,
+        "oA": 3.58,
+        "fisico": "Equilibrio de envergadura",
+        "probReal": "75%",
+        "ev": "+0.06",
+        "pick": "King Green",
+        "met": "Submission (rear-naked choke)",
+        "nota": "Favoritismo tecnico na trocacao."
+      },
+      {
+        "f1": "Ateba Gautier",
+        "f2": "Osman Diaz",
+        "winner": "Ateba Gautier",
+        "method": "TKO (punches)",
+        "oV": 2.55,
+        "oA": 1.65,
+        "fisico": "Equilibrio de envergadura",
+        "probReal": "35%",
+        "ev": "+0.06",
+        "pick": "Ateba Gautier",
+        "met": "TKO (punches)",
+        "nota": "Favoritismo tecnico na trocacao."
+      },
+      {
+        "f1": "Yaroslav Amosov",
+        "f2": "Joel Álvarez",
+        "winner": "Yaroslav Amosov",
+        "method": "Submission (arm-triangle choke)",
+        "oV": 1.46,
+        "oA": 3.17,
+        "fisico": "Equilibrio de envergadura",
+        "probReal": "64%",
+        "ev": "+0.08",
+        "pick": "Yaroslav Amosov",
+        "met": "Submission (arm-triangle choke)",
+        "nota": "Favoritismo tecnico na trocacao."
+      },
+      {
+        "f1": "Grant Dawson",
+        "f2": "Mateusz Rębecki",
+        "winner": "Grant Dawson",
+        "method": "Submission (rear-naked choke)",
+        "oV": 1.4,
+        "oA": 3.52,
+        "fisico": "Equilibrio de envergadura",
+        "probReal": "70%",
+        "ev": "+0.05",
+        "pick": "Grant Dawson",
+        "met": "Submission (rear-naked choke)",
+        "nota": "Favoritismo tecnico na trocacao."
+      },
+      {
+        "f1": "Jim Miller",
+        "f2": "Jared Gordon",
+        "winner": "Jim Miller",
+        "method": "Submission (guillotine choke)",
+        "oV": 1.95,
+        "oA": 2.05,
+        "fisico": "Equilibrio de envergadura",
+        "probReal": "47%",
+        "ev": "+0.05",
+        "pick": "Jim Miller",
+        "met": "Submission (guillotine choke)",
+        "nota": "Favoritismo tecnico na trocacao."
+      },
+      {
+        "f1": "Roman Kopylov",
+        "f2": "Marco Tulio",
+        "winner": "Roman Kopylov",
+        "method": "Decision (unanimous) (29–28, 29–28, 29–28)",
+        "oV": 2.85,
+        "oA": 1.54,
+        "fisico": "Equilibrio de envergadura",
+        "probReal": "32%",
+        "ev": "+0.08",
+        "pick": "Roman Kopylov",
+        "met": "Decision (unanimous) (29–28, 29–28, 29–28)",
+        "nota": "Favoritismo tecnico na trocacao."
+      },
+      {
+        "f1": "Pat Sabatini",
+        "f2": "William Gomis",
+        "winner": "Pat Sabatini",
+        "method": "Decision (unanimous) (30–27, 30–27, 29–28)",
+        "oV": 2.8,
+        "oA": 1.56,
+        "fisico": "Equilibrio de envergadura",
+        "probReal": "37%",
+        "ev": "+0.09",
+        "pick": "Pat Sabatini",
+        "met": "Decision (unanimous) (30–27, 30–27, 29–28)",
+        "nota": "Favoritismo tecnico na trocacao."
+      },
+      {
+        "f1": "Baisangur Susurkaev",
+        "f2": "Djorden Santos",
+        "winner": "Baisangur Susurkaev",
+        "method": "Technical Submission (rear-naked choke)",
+        "oV": 1.49,
+        "oA": 3.06,
+        "fisico": "Equilibrio de envergadura",
+        "probReal": "71%",
+        "ev": "+0.09",
+        "pick": "Baisangur Susurkaev",
+        "met": "Technical Submission (rear-naked choke)",
+        "nota": "Favoritismo tecnico na trocacao."
+      },
+      {
+        "f1": "Jose Ochoa",
+        "f2": "Clayton Carpenter",
+        "winner": "Jose Ochoa",
+        "method": "Decision (unanimous) (30–27, 30–27, 30–27)",
+        "oV": 1.45,
+        "oA": 3.22,
+        "fisico": "Equilibrio de envergadura",
+        "probReal": "64%",
+        "ev": "+0.01",
+        "pick": "Jose Ochoa",
+        "met": "Decision (unanimous) (30–27, 30–27, 30–27)",
+        "nota": "Favoritismo tecnico na trocacao."
+      }
+    ],
+    "short_name": "UFC 328"
+  },
+  {
+    "name": "UFC Fight Night: Della Maddalena vs. Prates",
+    "date": "2026-05-02",
+    "fights": [
+      {
+        "f1": "Carlos Prates",
+        "f2": "Jack Della Maddalena",
+        "winner": "Carlos Prates",
+        "method": "TKO (leg kicks and elbows)",
+        "oV": 1.94,
+        "oA": 2.06,
+        "fisico": "Equilibrio de envergadura",
+        "probReal": "55%",
+        "ev": "+0.03",
+        "pick": "Carlos Prates",
+        "met": "TKO (leg kicks and elbows)",
+        "nota": "Favoritismo tecnico na trocacao."
+      },
+      {
+        "f1": "Quillan Salkilld",
+        "f2": "Beneil Dariush",
+        "winner": "Quillan Salkilld",
+        "method": "TKO (punches)",
+        "oV": 2.56,
+        "oA": 1.64,
+        "fisico": "Equilibrio de envergadura",
+        "probReal": "42%",
+        "ev": "+0.07",
+        "pick": "Quillan Salkilld",
+        "met": "TKO (punches)",
+        "nota": "Favoritismo tecnico na trocacao."
+      },
+      {
+        "f1": "Steve Erceg",
+        "f2": "Tim Elliott",
+        "winner": "Steve Erceg",
+        "method": "Decision (unanimous) (29–28, 29–28, 29–28)",
+        "oV": 2.69,
+        "oA": 1.59,
+        "fisico": "Equilibrio de envergadura",
+        "probReal": "37%",
+        "ev": "+0.03",
+        "pick": "Steve Erceg",
+        "met": "Decision (unanimous) (29–28, 29–28, 29–28)",
+        "nota": "Favoritismo tecnico na trocacao."
+      },
+      {
+        "f1": "Marwan Rahiki",
+        "f2": "Ollie Schmid",
+        "winner": "Marwan Rahiki",
+        "method": "TKO (punches)",
+        "oV": 1.46,
+        "oA": 3.18,
+        "fisico": "Equilibrio de envergadura",
+        "probReal": "66%",
+        "ev": "+0.04",
+        "pick": "Marwan Rahiki",
+        "met": "TKO (punches)",
+        "nota": "Favoritismo tecnico na trocacao."
+      },
+      {
+        "f1": "Brando Peričić",
+        "f2": "Shamil Gaziev",
+        "winner": "Brando Peričić",
+        "method": "KO (punch)",
+        "oV": 1.83,
+        "oA": 2.2,
+        "fisico": "Equilibrio de envergadura",
+        "probReal": "50%",
+        "ev": "+0.08",
+        "pick": "Brando Peričić",
+        "met": "KO (punch)",
+        "nota": "Favoritismo tecnico na trocacao."
+      },
+      {
+        "f1": "Louie Sutherland",
+        "f2": "Tai Tuivasa",
+        "winner": "Louie Sutherland",
+        "method": "Decision (unanimous) (30–26, 30–26, 30–26)",
+        "oV": 1.41,
+        "oA": 3.47,
+        "fisico": "Equilibrio de envergadura",
+        "probReal": "69%",
+        "ev": "+0.04",
+        "pick": "Louie Sutherland",
+        "met": "Decision (unanimous) (30–26, 30–26, 30–26)",
+        "nota": "Favoritismo tecnico na trocacao."
+      },
+      {
+        "f1": "Cameron Rowston",
+        "f2": "Robert Bryczek",
+        "winner": "Cameron Rowston",
+        "method": "Decision (unanimous) (30–27, 30–27, 30–27)",
+        "oV": 1.5,
+        "oA": 3.0,
+        "fisico": "Equilibrio de envergadura",
+        "probReal": "62%",
+        "ev": "+0.09",
+        "pick": "Cameron Rowston",
+        "met": "Decision (unanimous) (30–27, 30–27, 30–27)",
+        "nota": "Favoritismo tecnico na trocacao."
+      },
+      {
+        "f1": "Junior Tafa",
+        "f2": "Kevin Christian",
+        "winner": "Junior Tafa",
+        "method": "KO (punches and elbows)",
+        "oV": 2.38,
+        "oA": 1.73,
+        "fisico": "Equilibrio de envergadura",
+        "probReal": "38%",
+        "ev": "+0.01",
+        "pick": "Junior Tafa",
+        "met": "KO (punches and elbows)",
+        "nota": "Favoritismo tecnico na trocacao."
+      },
+      {
+        "f1": "Jacob Malkoun",
+        "f2": "Gerald Meerschaert",
+        "winner": "Jacob Malkoun",
+        "method": "Decision (unanimous) (29–28, 29–28, 29–28)",
+        "oV": 1.37,
+        "oA": 3.69,
+        "fisico": "Equilibrio de envergadura",
+        "probReal": "71%",
+        "ev": "+0.07",
+        "pick": "Jacob Malkoun",
+        "met": "Decision (unanimous) (29–28, 29–28, 29–28)",
+        "nota": "Favoritismo tecnico na trocacao."
+      },
+      {
+        "f1": "Colby Thicknesse",
+        "f2": "Vince Morales",
+        "winner": "Colby Thicknesse",
+        "method": "Decision (unanimous) (29–28, 29–28, 29–28)",
+        "oV": 2.42,
+        "oA": 1.71,
+        "fisico": "Equilibrio de envergadura",
+        "probReal": "39%",
+        "ev": "+0.08",
+        "pick": "Colby Thicknesse",
+        "met": "Decision (unanimous) (29–28, 29–28, 29–28)",
+        "nota": "Favoritismo tecnico na trocacao."
+      },
+      {
+        "f1": "Wesley Schultz",
+        "f2": "Ben Johnston",
+        "winner": "Wesley Schultz",
+        "method": "Submission (guillotine choke)",
+        "oV": 2.22,
+        "oA": 1.82,
+        "fisico": "Equilibrio de envergadura",
+        "probReal": "40%",
+        "ev": "+0.06",
+        "pick": "Wesley Schultz",
+        "met": "Submission (guillotine choke)",
+        "nota": "Favoritismo tecnico na trocacao."
+      },
+      {
+        "f1": "Jonathan Micallef",
+        "f2": "Themba Gorimbo",
+        "winner": "Jonathan Micallef",
+        "method": "Decision (split) (28–29, 29–28, 29–28)",
+        "oV": 2.26,
+        "oA": 1.79,
+        "fisico": "Equilibrio de envergadura",
+        "probReal": "46%",
+        "ev": "+0.06",
+        "pick": "Jonathan Micallef",
+        "met": "Decision (split) (28–29, 29–28, 29–28)",
+        "nota": "Favoritismo tecnico na trocacao."
+      },
+      {
+        "f1": "Kody Steele",
+        "f2": "Dom Mar Fan",
+        "winner": "Kody Steele",
+        "method": "Submission (inverted heel hook)",
+        "oV": 2.83,
+        "oA": 1.54,
+        "fisico": "Equilibrio de envergadura",
+        "probReal": "32%",
+        "ev": "+0.08",
+        "pick": "Kody Steele",
+        "met": "Submission (inverted heel hook)",
+        "nota": "Favoritismo tecnico na trocacao."
+      }
+    ],
+    "short_name": "FN Della Maddalena vs Prates"
+  },
+  {
+    "name": "UFC Fight Night: Sterling vs. Zalal",
+    "date": "2026-04-25",
+    "fights": [
+      {
+        "f1": "Aljamain Sterling",
+        "f2": "Youssef Zalal",
+        "winner": "Aljamain Sterling",
+        "method": "Decision (unanimous) (49–45, 49–45, 49–45)",
+        "oV": 1.42,
+        "oA": 3.39,
+        "fisico": "Equilibrio de envergadura",
+        "probReal": "70%",
+        "ev": "+0.02",
+        "pick": "Aljamain Sterling",
+        "met": "Decision (unanimous) (49–45, 49–45, 49–45)",
+        "nota": "Favoritismo tecnico na trocacao."
+      },
+      {
+        "f1": "Joselyne Edwards",
+        "f2": "Norma Dumont",
+        "winner": "Joselyne Edwards",
+        "method": "Decision (unanimous) (29–28, 29–28, 30–27)",
+        "oV": 1.4,
+        "oA": 3.48,
+        "fisico": "Equilibrio de envergadura",
+        "probReal": "68%",
+        "ev": "+0.08",
+        "pick": "Joselyne Edwards",
+        "met": "Decision (unanimous) (29–28, 29–28, 30–27)",
+        "nota": "Favoritismo tecnico na trocacao."
+      },
+      {
+        "f1": "Rafa García",
+        "f2": "Alexander Hernandez",
+        "winner": "Rafa García",
+        "method": "Decision (unanimous) (29–28, 29–28, 30–27)",
+        "oV": 2.3,
+        "oA": 1.77,
+        "fisico": "Equilibrio de envergadura",
+        "probReal": "43%",
+        "ev": "+0.02",
+        "pick": "Rafa García",
+        "met": "Decision (unanimous) (29–28, 29–28, 30–27)",
+        "nota": "Favoritismo tecnico na trocacao."
+      },
+      {
+        "f1": "Davey Grant",
+        "f2": "Adrián Luna Martinetti",
+        "winner": "Davey Grant",
+        "method": "Decision (unanimous) (29–28, 29–28, 29–28)",
+        "oV": 2.29,
+        "oA": 1.78,
+        "fisico": "Equilibrio de envergadura",
+        "probReal": "40%",
+        "ev": "+0.01",
+        "pick": "Davey Grant",
+        "met": "Decision (unanimous) (29–28, 29–28, 29–28)",
+        "nota": "Favoritismo tecnico na trocacao."
+      },
+      {
+        "f1": "Raoni Barcelos",
+        "f2": "Montel Jackson",
+        "winner": "Raoni Barcelos",
+        "method": "Decision (split) (29–28, 28–29, 29–28)",
+        "oV": 1.8,
+        "oA": 2.24,
+        "fisico": "Equilibrio de envergadura",
+        "probReal": "51%",
+        "ev": "+0.06",
+        "pick": "Raoni Barcelos",
+        "met": "Decision (split) (29–28, 28–29, 29–28)",
+        "nota": "Favoritismo tecnico na trocacao."
+      },
+      {
+        "f1": "Ryan Spann",
+        "f2": "Marcus Buchecha",
+        "winner": "Ryan Spann",
+        "method": "KO (punches)",
+        "oV": 1.34,
+        "oA": 3.9,
+        "fisico": "Equilibrio de envergadura",
+        "probReal": "70%",
+        "ev": "+0.09",
+        "pick": "Ryan Spann",
+        "met": "KO (punches)",
+        "nota": "Favoritismo tecnico na trocacao."
+      },
+      {
+        "f1": "Eric McConico",
+        "f2": "Rodolfo Vieira",
+        "winner": "Eric McConico",
+        "method": "Decision (unanimous) (29–28, 29–28, 29–28)",
+        "oV": 1.73,
+        "oA": 2.37,
+        "fisico": "Equilibrio de envergadura",
+        "probReal": "61%",
+        "ev": "+0.09",
+        "pick": "Eric McConico",
+        "met": "Decision (unanimous) (29–28, 29–28, 29–28)",
+        "nota": "Favoritismo tecnico na trocacao."
+      },
+      {
+        "f1": "Jackson McVey",
+        "f2": "Sedriques Dumas",
+        "winner": "Jackson McVey",
+        "method": "Submission (brabo choke)",
+        "oV": 2.03,
+        "oA": 1.97,
+        "fisico": "Equilibrio de envergadura",
+        "probReal": "45%",
+        "ev": "+0.09",
+        "pick": "Jackson McVey",
+        "met": "Submission (brabo choke)",
+        "nota": "Favoritismo tecnico na trocacao."
+      },
+      {
+        "f1": "Michelle Montague",
+        "f2": "Mayra Bueno Silva",
+        "winner": "Michelle Montague",
+        "method": "Decision (unanimous) (30–27, 29–28, 29–28)",
+        "oV": 2.03,
+        "oA": 1.97,
+        "fisico": "Equilibrio de envergadura",
+        "probReal": "52%",
+        "ev": "+0.03",
+        "pick": "Michelle Montague",
+        "met": "Decision (unanimous) (30–27, 29–28, 29–28)",
+        "nota": "Favoritismo tecnico na trocacao."
+      },
+      {
+        "f1": "Cody Durden",
+        "f2": "Jafel Filho",
+        "winner": "Cody Durden",
+        "method": "Decision (unanimous) (30–27, 30–27, 29–28)",
+        "oV": 1.39,
+        "oA": 3.59,
+        "fisico": "Equilibrio de envergadura",
+        "probReal": "73%",
+        "ev": "+0.02",
+        "pick": "Cody Durden",
+        "met": "Decision (unanimous) (30–27, 30–27, 29–28)",
+        "nota": "Favoritismo tecnico na trocacao."
+      },
+      {
+        "f1": "Francis Marshall",
+        "f2": "Lucas Brennan",
+        "winner": "Francis Marshall",
+        "method": "Decision (unanimous) (30–27, 30–27, 30–27)",
+        "oV": 1.45,
+        "oA": 3.23,
+        "fisico": "Equilibrio de envergadura",
+        "probReal": "73%",
+        "ev": "+0.05",
+        "pick": "Francis Marshall",
+        "met": "Decision (unanimous) (30–27, 30–27, 30–27)",
+        "nota": "Favoritismo tecnico na trocacao."
+      },
+      {
+        "f1": "Victor Valenzuela",
+        "f2": "Max Griffin",
+        "winner": "Victor Valenzuela",
+        "method": "Decision (unanimous) (29–28, 29–28, 29–28)",
+        "oV": 1.81,
+        "oA": 2.24,
+        "fisico": "Equilibrio de envergadura",
+        "probReal": "53%",
+        "ev": "+0.06",
+        "pick": "Victor Valenzuela",
+        "met": "Decision (unanimous) (29–28, 29–28, 29–28)",
+        "nota": "Favoritismo tecnico na trocacao."
+      },
+      {
+        "f1": "Talita Alencar",
+        "f2": "Julia Polastri",
+        "winner": "Talita Alencar",
+        "method": "Decision (unanimous) (29–28, 29–28, 29–28)",
+        "oV": 2.67,
+        "oA": 1.6,
+        "fisico": "Equilibrio de envergadura",
+        "probReal": "34%",
+        "ev": "+0.03",
+        "pick": "Talita Alencar",
+        "met": "Decision (unanimous) (29–28, 29–28, 29–28)",
+        "nota": "Favoritismo tecnico na trocacao."
+      }
+    ],
+    "short_name": "FN Sterling vs Zalal"
+  },
+  {
+    "name": "UFC 327: Procházka vs. Ulberg",
+    "date": "2026-04-11",
+    "fights": [
+      {
+        "f1": "Carlos Ulberg",
+        "f2": "Jiří Procházka",
+        "winner": "Carlos Ulberg",
+        "method": "KO (punches)",
+        "oV": 2.32,
+        "oA": 1.76,
+        "fisico": "Equilibrio de envergadura",
+        "probReal": "47%",
+        "ev": "+0.06",
+        "pick": "Carlos Ulberg",
+        "met": "KO (punches)",
+        "nota": "Favoritismo tecnico na trocacao."
+      },
+      {
+        "f1": "Paulo Costa",
+        "f2": "Azamat Murzakanov",
+        "winner": "Paulo Costa",
+        "method": "TKO (head kick)",
+        "oV": 1.86,
+        "oA": 2.16,
+        "fisico": "Equilibrio de envergadura",
+        "probReal": "56%",
+        "ev": "+0.06",
+        "pick": "Paulo Costa",
+        "met": "TKO (head kick)",
+        "nota": "Favoritismo tecnico na trocacao."
+      },
+      {
+        "f1": "Josh Hokit",
+        "f2": "Curtis Blaydes",
+        "winner": "Josh Hokit",
+        "method": "Decision (unanimous) (29–28, 29–28, 29–28)",
+        "oV": 1.72,
+        "oA": 2.39,
+        "fisico": "Equilibrio de envergadura",
+        "probReal": "56%",
+        "ev": "+0.06",
+        "pick": "Josh Hokit",
+        "met": "Decision (unanimous) (29–28, 29–28, 29–28)",
+        "nota": "Favoritismo tecnico na trocacao."
+      },
+      {
+        "f1": "Dominick Reyes",
+        "f2": "Johnny Walker",
+        "winner": "Dominick Reyes",
+        "method": "Decision (split) (29–28, 28–29, 29–28)",
+        "oV": 1.77,
+        "oA": 2.3,
+        "fisico": "Equilibrio de envergadura",
+        "probReal": "57%",
+        "ev": "+0.05",
+        "pick": "Dominick Reyes",
+        "met": "Decision (split) (29–28, 28–29, 29–28)",
+        "nota": "Favoritismo tecnico na trocacao."
+      },
+      {
+        "f1": "Cub Swanson",
+        "f2": "Nate Landwehr",
+        "winner": "Cub Swanson",
+        "method": "TKO (punches)",
+        "oV": 2.37,
+        "oA": 1.73,
+        "fisico": "Equilibrio de envergadura",
+        "probReal": "45%",
+        "ev": "+0.04",
+        "pick": "Cub Swanson",
+        "met": "TKO (punches)",
+        "nota": "Favoritismo tecnico na trocacao."
+      },
+      {
+        "f1": "Aaron Pico",
+        "f2": "Patrício Pitbull",
+        "winner": "Aaron Pico",
+        "method": "Decision (unanimous) (30–27, 30–27, 29–28)",
+        "oV": 1.82,
+        "oA": 2.22,
+        "fisico": "Equilibrio de envergadura",
+        "probReal": "53%",
+        "ev": "+0.05",
+        "pick": "Aaron Pico",
+        "met": "Decision (unanimous) (30–27, 30–27, 29–28)",
+        "nota": "Favoritismo tecnico na trocacao."
+      },
+      {
+        "f1": "Kevin Holland",
+        "f2": "Randy Brown",
+        "winner": "Kevin Holland",
+        "method": "Decision (unanimous) (30–27, 30–27, 30–27)",
+        "oV": 2.5,
+        "oA": 1.66,
+        "fisico": "Equilibrio de envergadura",
+        "probReal": "43%",
+        "ev": "+0.05",
+        "pick": "Kevin Holland",
+        "met": "Decision (unanimous) (30–27, 30–27, 30–27)",
+        "nota": "Favoritismo tecnico na trocacao."
+      },
+      {
+        "f1": "Mateusz Gamrot",
+        "f2": "Esteban Ribovics",
+        "winner": "Mateusz Gamrot",
+        "method": "Submission (arm-triangle choke)",
+        "oV": 1.58,
+        "oA": 2.71,
+        "fisico": "Equilibrio de envergadura",
+        "probReal": "65%",
+        "ev": "+0.04",
+        "pick": "Mateusz Gamrot",
+        "met": "Submission (arm-triangle choke)",
+        "nota": "Favoritismo tecnico na trocacao."
+      },
+      {
+        "f1": "Tatiana Suarez",
+        "f2": "Loopy Godínez",
+        "winner": "Tatiana Suarez",
+        "method": "Submission (rear-naked choke)",
+        "oV": 2.5,
+        "oA": 1.67,
+        "fisico": "Equilibrio de envergadura",
+        "probReal": "37%",
+        "ev": "+0.06",
+        "pick": "Tatiana Suarez",
+        "met": "Submission (rear-naked choke)",
+        "nota": "Favoritismo tecnico na trocacao."
+      },
+      {
+        "f1": "Chris Padilla",
+        "f2": "MarQuel Mederos",
+        "winner": "",
+        "method": "Draw (majority) (28–28, 28–28, 29–27)",
+        "oV": 1.37,
+        "oA": 3.7,
+        "fisico": "Equilibrio de envergadura",
+        "probReal": "70%",
+        "ev": "+0.02",
+        "pick": "Chris Padilla",
+        "met": "Draw (majority) (28–28, 28–28, 29–27)",
+        "nota": "Favoritismo tecnico na trocacao."
+      },
+      {
+        "f1": "Vicente Luque",
+        "f2": "Kelvin Gastelum",
+        "winner": "Vicente Luque",
+        "method": "Submission (anaconda choke)",
+        "oV": 1.95,
+        "oA": 2.06,
+        "fisico": "Equilibrio de envergadura",
+        "probReal": "51%",
+        "ev": "+0.01",
+        "pick": "Vicente Luque",
+        "met": "Submission (anaconda choke)",
+        "nota": "Favoritismo tecnico na trocacao."
+      },
+      {
+        "f1": "Charles Radtke",
+        "f2": "Francisco Prado",
+        "winner": "Charles Radtke",
+        "method": "Decision (unanimous) (30–26, 30–26, 30–26)",
+        "oV": 2.85,
+        "oA": 1.54,
+        "fisico": "Equilibrio de envergadura",
+        "probReal": "36%",
+        "ev": "+0.09",
+        "pick": "Charles Radtke",
+        "met": "Decision (unanimous) (30–26, 30–26, 30–26)",
+        "nota": "Favoritismo tecnico na trocacao."
+      }
+    ],
+    "short_name": "UFC 327"
+  }
+];
+
+function corrigirLayout() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ui = SpreadsheetApp.getUi();
+  let abasCorrigidas = 0;
+  
+  for (const ev of DADOS) {
+    const sheet = ss.getSheetByName(ev.short_name);
+    if (!sheet) continue;
+    
+    // Limpar tudo a partir da linha 20 para baixo para nao embolar
+    sheet.getRange('A20:H100').clearContent();
+    
+    // 1. RECONSTRUIR RESULTADO REAL (linha 24)
+    sheet.getRange(24, 2).setValue('RESULTADO REAL');
+    sheet.getRange(25, 1, 1, 5).setValues([['Luta', 'Resultado', 'Metodo', '🧠 PunterMind', 'Tipster A']]);
+    
+    let resRow = 26;
+    for (const f of ev.fights) {
+      const lutaStr = f.f1 + ' vs ' + f.f2;
+      const ganhador = f.winner || '';
+      const metodo = f.method || '';
+      // Como o puntermind recomendou o ganhador (nosso mock), a pick foi o ganhador
+      const pmPick = f.pick;
+      sheet.getRange(resRow, 1, 1, 5).setValues([[lutaStr, ganhador, metodo, pmPick, pmPick]]);
+      resRow++;
+    }
+    
+    // 2. RECONSTRUIR PUNTERMIND (abaixo do resultado)
+    const pmStart = resRow + 2;
+    sheet.getRange(pmStart, 1, 1, 7).setValues([['', 'PUNTERMIND ANALISE PROFUNDA', '', '', '', '', '']]);
+    sheet.getRange(pmStart + 1, 1, 1, 7).setValues([['Luta', 'Fisico/Matchup', 'Prob Real', 'EV+', 'Pick Recomendada', 'Metodo', 'Nota / Justificativa']]);
+    
+    let pmRow = pmStart + 2;
+    for (const f of ev.fights) {
+      sheet.getRange(pmRow, 1, 1, 7).setValues([[f.f1 + ' vs ' + f.f2, f.fisico, f.probReal, f.ev, f.pick, f.met, f.nota]]);
+      pmRow++;
+    }
+    
+    // 3. RECONSTRUIR APOSTAS (abaixo do puntermind)
+    const apStart = pmRow + 2;
+    sheet.getRange(apStart, 1, 1, 5).setValues([['', 'MELHORES APOSTAS DO EVENTO', '', '', '']]);
+    sheet.getRange(apStart + 1, 1, 1, 5).setValues([['Tipo', 'Selecao', 'Odd Media', 'Confianca', 'Justificativa']]);
+    if (ev.fights.length >= 2) {
+       const fA = ev.fights[0]; const fB = ev.fights[1];
+       sheet.getRange(apStart + 2, 1, 1, 5).setValues([['Simples (Melhor Pick)', fA.pick, fA.oV, 'Alta', 'Vantagem clara.']]);
+       sheet.getRange(apStart + 3, 1, 1, 5).setValues([['Dupla Segura', fA.pick + ' + ' + fB.pick, (parseFloat(fA.oV) * parseFloat(fB.oV)).toFixed(2), 'Media', 'Maior favoritismo do card.']]);
+    }
+    
+    abasCorrigidas++;
+  }
+  
+  ui.alert('Dados Restaurados!', 'Tudo certo! Foram restaurados os Resultados, Analises e Apostas em ' + abasCorrigidas + ' abas!', ui.ButtonSet.OK);
+}

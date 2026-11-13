@@ -1,0 +1,133 @@
+/**
+ * UFC UPDATER - EVENTOS FUTUROS
+ * 
+ * 1. Extensoes > Apps Script
+ * 2. Apague tudo e cole este codigo
+ * 3. Execute a funcao "criarEventosFuturos"
+ */
+
+const EVENTOS_FUTUROS = [
+  {
+    "name": "UFC Fight Night 287",
+    "date": "Sep 5, 2026",
+    "url": "https://en.wikipedia.org/wiki/UFC_Fight_Night_287",
+    "fights": []
+  },
+  {
+    "name": "UFC Fight Night 286",
+    "date": "Aug 30, 2026",
+    "url": "https://en.wikipedia.org/wiki/UFC_Fight_Night_286",
+    "fights": []
+  },
+  {
+    "name": "UFC 330: Makhachev vs. Machado Garry",
+    "date": "Aug 15, 2026",
+    "url": "https://en.wikipedia.org/wiki/UFC_330",
+    "fights": [
+      {
+        "f1": "Makhachev",
+        "f2": "Machado Garry"
+      }
+    ]
+  },
+  {
+    "name": "UFC Fight Night: Medić vs. Rodriguez",
+    "date": "Aug 1, 2026",
+    "url": "https://en.wikipedia.org/wiki/UFC_Fight_Night:_Medi%C4%87_vs._Rodriguez",
+    "fights": [
+      {
+        "f1": "Medić",
+        "f2": "Rodriguez"
+      }
+    ]
+  },
+  {
+    "name": "UFC Fight Night: Ankalaev vs. Rountree Jr.",
+    "date": "Jul 25, 2026",
+    "url": "https://en.wikipedia.org/wiki/UFC_Fight_Night:_Ankalaev_vs._Rountree_Jr.",
+    "fights": [
+      {
+        "f1": "Ankalaev",
+        "f2": "Rountree Jr."
+      }
+    ]
+  },
+  {
+    "name": "UFC Fight Night 281",
+    "date": "Jul 18, 2026",
+    "url": "https://en.wikipedia.org/wiki/UFC_Fight_Night_281",
+    "fights": []
+  },
+  {
+    "name": "UFC 329: McGregor vs. Holloway 2",
+    "date": "Jul 11, 2026",
+    "url": "https://en.wikipedia.org/wiki/UFC_329",
+    "fights": [
+      {
+        "f1": "McGregor",
+        "f2": "Holloway"
+      }
+    ]
+  },
+  {
+    "name": "UFC Fight Night: Fiziev vs. Torres",
+    "date": "Jun 27, 2026",
+    "url": "https://en.wikipedia.org/wiki/UFC_Fight_Night:_Fiziev_vs._Torres",
+    "fights": [
+      {
+        "f1": "Fiziev",
+        "f2": "Torres"
+      }
+    ]
+  }
+];
+
+function criarEventosFuturos() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let template = ss.getSheetByName('TEMPLATE_CARD');
+  
+  // Se o usuário deletou o TEMPLATE_CARD, usamos o primeiro evento disponivel como clone
+  if (!template) {
+     const sheets = ss.getSheets();
+     template = sheets.find(s => s.getName().startsWith('FN ') || s.getName().startsWith('UFC '));
+     if (!template) {
+       SpreadsheetApp.getUi().alert('Não foi possível achar um template para copiar!');
+       return;
+     }
+  }
+  
+  let abasCriadas = 0;
+  
+  for (const ev of EVENTOS_FUTUROS) {
+    // Formatar nome
+    let shortName = ev.name.replace('UFC Fight Night: ', 'FN ').replace('vs.', 'vs');
+    if (shortName.startsWith('UFC ') && shortName.includes(':')) {
+      shortName = shortName.split(':')[0];
+    }
+    shortName = shortName.substring(0, 30);
+    
+    let sheet = ss.getSheetByName(shortName);
+    if (!sheet) {
+      sheet = template.copyTo(ss);
+      sheet.setName(shortName);
+      abasCriadas++;
+      
+      // Limpar o conteudo da aba clonada (Mudar Nome e Data)
+      sheet.getRange('A1').setValue(ev.date);
+      
+      // Limpar os lutadores antigos e colocar a nova luta principal
+      sheet.getRange('A5:E20').clearContent();
+      
+      let rowIdx = 5;
+      for (const f of ev.fights) {
+        sheet.getRange(rowIdx, 1, 1, 5).setValues([[f.f1, '', '', '', f.f2]]);
+        rowIdx++;
+      }
+      
+      // Limpar a seção do puntermind
+      sheet.getRange('A24:G40').clearContent();
+    }
+  }
+  
+  SpreadsheetApp.getUi().alert('Futuros Adicionados!', 'Foram criadas ' + abasCriadas + ' abas para eventos futuros já com as lutas principais!', SpreadsheetApp.getUi().ButtonSet.OK);
+}

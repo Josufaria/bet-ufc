@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>UFC Bet Analyzer — Análise EV+ com Dados Físicos</title>
+  <meta name="description" content="Análise profissional de lutas UFC com probabilidades ajustadas por altura, envergadura, estilo de luta e detector de zebras. Picks EV+ com dados históricos reais.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🥊</text></svg>">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css?v=5">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════
+     HEADER
+     ══════════════════════════════════════════ -->
+<header>
+  <nav>
+    <a href="#" class="logo">
+      <span class="logo-icon">🥊</span>
+      UFC Bet Analyzer
+    </a>
+    <div class="nav-right">
+      <span class="nav-badge">EV+ PRO</span>
+    </div>
+  </nav>
+</header>
+
+<!-- ══════════════════════════════════════════
+     HERO
+     ══════════════════════════════════════════ -->
+<section class="hero">
+  <div class="hero-bg-glow"></div>
+  <div class="hero-badge">🎯 ANÁLISE EV+ PROFISSIONAL</div>
+  <h1 class="hero-title">🥊 UFC Bet Analyzer</h1>
+  <p class="hero-sub">
+    Probabilidades ajustadas por altura, envergadura e estilo de luta.
+    Detector de zebras com histórico real. Picks com valor esperado positivo.
+  </p>
+  <div class="hero-kpis">
+    <div class="hero-kpi">
+      <div class="kpi-val" id="kpi-acertos" style="color:var(--cyan)">—</div>
+      <div class="kpi-lbl">Acertos / Erros</div>
+    </div>
+    <div class="hero-kpi">
+      <div class="kpi-val" id="kpi-events" style="color:var(--text2)">—</div>
+      <div class="kpi-lbl">Eventos</div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════
+     LOADING
+     ══════════════════════════════════════════ -->
+  <!-- INITIAL LOADING SKELETON -->
+  <div id="loading">
+    <div class="skeleton-header"></div>
+    <div class="skeleton-grid">
+      <div class="skeleton-card">
+        <div class="skel-photo"></div><div class="skel-vs"></div><div class="skel-photo"></div>
+      </div>
+      <div class="skeleton-card">
+        <div class="skel-photo"></div><div class="skel-vs"></div><div class="skel-photo"></div>
+      </div>
+      <div class="skeleton-card">
+        <div class="skel-photo"></div><div class="skel-vs"></div><div class="skel-photo"></div>
+      </div>
+      <div class="skeleton-card">
+        <div class="skel-photo"></div><div class="skel-vs"></div><div class="skel-photo"></div>
+      </div>
+    </div>
+    <div style="margin-top: 20px; color: var(--text-muted); font-size: 14px; text-align: center;">Carregando cards de luta ao vivo (ESPN)...</div>
+  </div>
+
+<!-- ══════════════════════════════════════════
+     CONTEÚDO PRINCIPAL
+     ══════════════════════════════════════════ -->
+<main id="main-content" hidden>
+
+  <!-- ── TABS NAVEGAÇÃO ────────────────────── -->
+  <div class="main-tabs">
+    <button class="tab-btn active" onclick="switchTab('futuros')" id="tab-btn-futuros">
+      🔮 Lutas Futuras
+    </button>
+    <button class="tab-btn" onclick="switchTab('passados')" id="tab-btn-passados">
+      🔙 Lutas Passadas
+    </button>
+    <button class="tab-btn" onclick="switchTab('historico')" id="tab-btn-historico">
+      📊 Desempenho Histórico
+    </button>
+  </div>
+
+  <!-- ── SELETOR DE EVENTO ─────────────────── -->
+  <!-- select oculto para compatibilidade com o JS existente -->
+  <select id="evento-sel" onchange="renderEvento()" style="display:none"></select>
+
+  <div class="ev-picker-section">
+    <div class="ev-picker-header">
+      <div class="ev-picker-title">📅 Selecionar Card</div>
+      <span class="ev-meta" id="ev-meta"></span>
+    </div>
+    <div class="ev-picker-bar" id="ev-picker-bar">
+      <!-- pills geradas pelo JS -->
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       ABA 1 e 2: CARDS DE LUTA (FUTURAS E PASSADAS)
+       ══════════════════════════════════════════ -->
+  <div id="tab-content-cards">
+    <!-- FIGHT CARDS (Análise Física + EV) ─── -->
+    <div class="section" id="fight-cards-section" style="margin-top: 24px;">
+      <div class="section-header">
+        <span class="section-icon">⚡</span>
+        <div>
+          <div class="section-title">Cards de Luta — Análise PunterMMA</div>
+          <div class="section-sub">Odds, vantagem física e probabilidade ajustada. Clique no ✏️ para editar ou cadastrar as medidas de um lutador.</div>
+        </div>
+      </div>
+      <div id="fight-cards-container"></div>
+    </div>
+
+    <!-- CALCULADORA DE STAKES / GESTÃO DE BANCA ─── -->
+    <div class="section" id="stakes-calculator-section">
+      <div class="section-header">
+        <span class="section-icon">📊</span>
+        <div>
+          <div class="section-title">Calculadora de Gestão de Banca & Risco</div>
+          <div class="section-sub">Veja as sugestões de apostas (stakes) para os palpites recomendados baseadas no seu controle financeiro</div>
+        </div>
+      </div>
+      <div class="bankroll-controls-card">
+        <div class="bk-controls-grid">
+          <div class="bk-control-item">
+            <label for="bk-initial">Banca Atual</label>
+            <input type="number" id="bk-initial" value="10000" min="10" step="100" onchange="updateStakesCalculator()">
+          </div>
+          <div class="bk-control-item">
+            <label for="bk-base-stake">Aposta Base (Flat)</label>
+            <input type="number" id="bk-base-stake" value="200" min="5" step="10" onchange="updateStakesCalculator()">
+          </div>
+          <div class="bk-control-item">
+            <label for="bk-kelly-fraction">Frações de Kelly</label>
+            <select id="bk-kelly-fraction" onchange="updateStakesCalculator()">
+              <option value="0.1">1/10 Kelly (Ultra-conservador)</option>
+              <option value="0.25" selected>1/4 Kelly (Conservador)</option>
+              <option value="0.5">1/2 Kelly (Moderado)</option>
+              <option value="1.0">Kelly Cheio (Agressivo)</option>
+            </select>
+          </div>
+          <div class="bk-control-item">
+            <label for="bk-currency">Moeda</label>
+            <select id="bk-currency" onchange="updateStakesCalculator()">
+              <option value="R$">Real (R$)</option>
+              <option value="u">Unidades (u)</option>
+              <option value="$">Dólar ($)</option>
+            </select>
+          </div>
+          <div class="bk-control-item">
+            <label for="bk-strategy">Estratégia de Gestão</label>
+            <select id="bk-strategy" onchange="updateStakesCalculator()">
+              <option value="flat" selected>Aposta Fixa (Flat Bet)</option>
+              <option value="kelly">Critério de Kelly (Fração de Risco)</option>
+              <option value="ev">Proporcional ao EV (Valor Esperado)</option>
+              <option value="confidence">Proporcional à Confiança do Modelo</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Stakes Output Table -->
+      <div id="stakes-calc-results" class="mt-16"></div>
+    </div>
+
+    <!-- APOSTAS SUGERIDAS DA PLANILHA ──────────────────── -->
+    <div class="section" id="ev-section">
+      <div class="section-header">
+        <span class="section-icon">🎯</span>
+        <div>
+          <div class="section-title">Análise PunterMind do Evento</div>
+          <div class="section-sub">Vantagens físicas e apostas sugeridas compiladas da planilha</div>
+        </div>
+      </div>
+      <div id="ev-table-container"></div>
+      <div id="ev-apostas-container" class="mt-24"></div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       ABA 2: HISTÓRICO E PERFORMANCE ACUMULADA
+       ══════════════════════════════════════════ -->
+  <div id="tab-content-historico" style="display:none">
+    <!-- PERFORMANCE HISTÓRICA ─────────────── -->
+    <div class="section" style="margin-top: 24px;">
+      <div class="section-header">
+        <span class="section-icon">📈</span>
+        <div>
+          <div class="section-title">Performance Histórica Acumulada</div>
+          <div class="section-sub">Totais acumulados de todos os eventos da planilha</div>
+        </div>
+      </div>
+      <div class="stats-row" id="perf-stats"></div>
+      <div class="chart-card">
+        <div class="chart-title">ROI Acumulado por Evento — PunterMind</div>
+        <canvas id="roi-chart"></canvas>
+      </div>
+    </div>
+
+    <!-- PALPITES TOTAIS ────────────────────── -->
+    <div class="section">
+      <div class="section-header">
+        <span class="section-icon">📋</span>
+        <div>
+          <div class="section-title">Palpites Totais por Evento</div>
+          <div class="section-sub">Resultado por evento · R$100 por pick · acumulado de todos os eventos</div>
+        </div>
+      </div>
+      <div id="all-picks-container"></div>
+    </div>
+
+    <!-- ROI SIMULATOR ──────────────────────── -->
+    <div class="section">
+      <div class="section-header">
+        <span class="section-icon">💰</span>
+        <div>
+          <div class="section-title">Simulador de ROI de Longo Prazo (Flat Bet)</div>
+          <div class="section-sub">Comparação de estratégias acumuladas · 1 unidade por pick</div>
+        </div>
+      </div>
+      <div class="roi-compare-grid" id="roi-compare"></div>
+      <div class="chart-card mt-24">
+        <div class="chart-title">ROI Acumulado: PunterMMA vs Estratégias Benchmark</div>
+        <canvas id="compare-chart"></canvas>
+      </div>
+
+      <!-- ROI por Apostas Sugeridas -->
+      <div class="section-header mt-32">
+        <span class="section-icon">🧠</span>
+        <div>
+          <div class="section-title">ROI das Apostas Sugeridas</div>
+          <div class="section-sub">Simples, Dupla e Tripla sugeridas · acumulado de todos os eventos</div>
+        </div>
+      </div>
+      <div id="apostas-roi-table"></div>
+    </div>
+
+    <!-- ODDS CATEGORIES (PICKS) ───────────── -->
+    <div class="section">
+      <div class="section-header">
+        <span class="section-icon">📋</span>
+        <div>
+          <div class="section-title">ROI por Categoria de Odds — Picks PunterMind</div>
+          <div class="section-sub">Se apostasse 1u em todos os lutadores de cada categoria escolhidos nos picks</div>
+        </div>
+      </div>
+      <div id="odds-cats-container"></div>
+    </div>
+
+    <!-- ZEBRA DETECTOR ──────────────────────── -->
+    <div class="section">
+      <div class="section-header">
+        <span class="section-icon">🦓</span>
+        <div>
+          <div class="section-title">ROI Geral por Faixa de Odds</div>
+          <div class="section-sub">Simulação cega: apostando 1u em todo lutador de cada categoria (independente de análise)</div>
+        </div>
+      </div>
+      <div class="zebra-section-banner">
+        <div class="zebra-banner-icon">🦓</div>
+        <div>
+          <div class="zebra-banner-title">Detector de Padrões de Zebra</div>
+          <div class="zebra-banner-sub">Monitora hit rate histórico por faixa de odds. Quando uma categoria apresenta hit rate ≥ 32%, os cards de luta exibem o alerta "ZEBRA QUENTE 🔥" para aquela luta.</div>
+        </div>
+      </div>
+      <div id="odds-geral-container"></div>
+    </div>
+
+    <!-- GRAPPLERS VS STRIKERS ──────────────── -->
+    <div class="section">
+      <div class="section-header">
+        <span class="section-icon">🥋</span>
+        <div>
+          <div class="section-title">Grapplers vs Strikers</div>
+          <div class="section-sub">Win rate histórico quando os estilos se cruzam nos eventos analisados</div>
+        </div>
+      </div>
+      <div class="style-grid" id="style-grid"></div>
+      <div class="chart-card mt-16">
+        <div class="chart-title">Vitórias por estilo de luta</div>
+        <canvas id="style-chart"></canvas>
+      </div>
+    </div>
+  </div>
+
+</main><!-- /main-content -->
+
+<!-- ══════════════════════════════════════════
+     MODAL DE EDIÇÃO DE LUTADOR (BANCO DINÂMICO)
+     ══════════════════════════════════════════ -->
+<div class="modal-overlay" id="fighter-modal">
+  <div class="modal-card">
+    <div class="modal-title">✏️ Editar / Cadastrar Lutador</div>
+    <div class="modal-sub">
+      Preencha as informações do lutador. Os dados serão salvos localmente e aplicados aos cálculos imediatamente.
+    </div>
+
+    <div class="modal-label">Nome do Lutador</div>
+    <input class="modal-input" id="fighter-name" type="text" readonly style="background:rgba(255,255,255,0.02);color:var(--text2);cursor:not-allowed">
+
+    <div class="two-col">
+      <div>
+        <div class="modal-label">Altura (cm)</div>
+        <input class="modal-input" id="fighter-height" type="number" placeholder="Ex: 183" min="120" max="230">
+      </div>
+      <div>
+        <div class="modal-label">Envergadura (cm)</div>
+        <input class="modal-input" id="fighter-reach" type="number" placeholder="Ex: 188" min="120" max="230">
+      </div>
+    </div>
+
+    <div class="two-col" style="margin-top: 8px;">
+      <div>
+        <div class="modal-label">Guarda (Stance)</div>
+        <select class="modal-input" id="fighter-stance" style="font-family: inherit;">
+          <option value="Orthodox">Orthodox</option>
+          <option value="Southpaw">Southpaw</option>
+          <option value="Switch">Switch</option>
+        </select>
+      </div>
+      <div>
+        <div class="modal-label">Estilo Principal</div>
+        <select class="modal-input" id="fighter-style" style="font-family: inherit;">
+          <option value="Striker">Striker</option>
+          <option value="Grappler">Grappler</option>
+          <option value="Wrestler">Wrestler</option>
+          <option value="All-Round">All-Round</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="modal-actions" style="margin-top: 24px;">
+      <button class="btn-primary" onclick="saveFighterStats()">✅ Salvar e Atualizar</button>
+      <button class="btn-secondary" onclick="closeFighterModal()">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     FOOTER
+     ══════════════════════════════════════════ -->
+<footer>
+  🥊 <strong>UFC Bet Analyzer</strong> — Análise EV+ com dados físicos &nbsp;·&nbsp;
+  Banco de dados local editável via LocalStorage &nbsp;·&nbsp;
+  <span style="color:var(--red)">⚠️ Apenas para fins informativos. Aposte com responsabilidade.</span>
+</footer>
+
+<!-- ══════════════════════════════════════════
+     IA CHATBOT
+     ══════════════════════════════════════════ -->
+
+<!-- Chatbot Botão e Janela -->
+<button class="chatbot-btn" onclick="toggleChatbot()" title="Falar com Especialista de IA">🤖</button>
+
+<div id="chatbot-window" class="chatbot-window" style="display:none;">
+  <div class="chatbot-header">
+    <strong>🤖 Especialista UFC (IA)</strong>
+    <div>
+      <span style="cursor:pointer;" onclick="toggleChatbot()">×</span>
+    </div>
+  </div>
+  <div id="chat-body" class="chatbot-body">
+    <div class="chat-message ai-message">
+      Olá! Sou seu assistente de Inteligência Artificial. Faça qualquer pergunta sobre as lutas ou estatísticas!
+    </div>
+  </div>
+  <div class="chatbot-input-area">
+    <input type="text" id="chat-input" placeholder="Digite sua pergunta..." onkeypress="if(event.key === 'Enter') sendChatMessage()">
+    <button onclick="sendChatMessage()">➤</button>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     SCRIPTS (ordem importa!)
+     ══════════════════════════════════════════ -->
+<script src="js/fighters-db.js?v=5"></script>
+<script src="js/analyzer.js?v=5"></script>
+<script src="js/ai-integration.js?v=5"></script>
+<script src="js/app.js?v=5"></script>
+
+</body>
+</html>

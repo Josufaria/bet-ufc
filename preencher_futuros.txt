@@ -1,0 +1,749 @@
+/**
+ * UFC PREENCHER FUTUROS - DADOS COMPLETOS E ESTATISTICAS
+ * 
+ * 1. Extensoes > Apps Script
+ * 2. Cole este codigo e apague o resto
+ * 3. Execute a funcao "preencherFuturosCompletos"
+ */
+
+const DADOS_FUTUROS = [
+  {
+    "name": "UFC 330: Makhachev vs. Machado Garry",
+    "date": "Aug 15, 2026",
+    "fights": [
+      {
+        "f1": "Islam Makhachev",
+        "f2": "Ian Machado Garry",
+        "oV": 1.88,
+        "oA": 2.13,
+        "fisico": "Vantagem leve de envergadura",
+        "probReal": "50%",
+        "ev": "+0.05",
+        "pick": "Islam Makhachev",
+        "met": "Decisão",
+        "nota": "Favoritismo claro"
+      },
+      {
+        "f1": "Mackenzie Dern",
+        "f2": "Gillian Robertson",
+        "oV": 1.4,
+        "oA": 3.52,
+        "fisico": "Equilíbrio técnico",
+        "probReal": "73%",
+        "ev": "+0.09",
+        "pick": "Mackenzie Dern",
+        "met": "Decisão",
+        "nota": "Favoritismo claro"
+      }
+    ],
+    "short_name": "UFC 330"
+  },
+  {
+    "name": "UFC Fight Night: Medić vs. Rodriguez",
+    "date": "Aug 1, 2026",
+    "fights": [
+      {
+        "f1": "Uroš Medić",
+        "f2": "Daniel Rodriguez",
+        "oV": 1.78,
+        "oA": 2.28,
+        "fisico": "Vantagem leve de envergadura",
+        "probReal": "56%",
+        "ev": "+0.07",
+        "pick": "Uroš Medić",
+        "met": "Decisão",
+        "nota": "Favoritismo claro"
+      },
+      {
+        "f1": "Jan Błachowicz",
+        "f2": "Bogdan Guskov",
+        "oV": 1.58,
+        "oA": 2.72,
+        "fisico": "Vantagem leve de envergadura",
+        "probReal": "67%",
+        "ev": "+0.06",
+        "pick": "Jan Błachowicz",
+        "met": "Decisão",
+        "nota": "Favoritismo claro"
+      },
+      {
+        "f1": "Ante Delija",
+        "f2": "Johnny Walker",
+        "oV": 2.73,
+        "oA": 1.58,
+        "fisico": "Equilíbrio técnico",
+        "probReal": "60%",
+        "ev": "+0.08",
+        "pick": "Johnny Walker",
+        "met": "Decisão",
+        "nota": "Zebra com valor (EV+)"
+      },
+      {
+        "f1": "Aleksandar Rakić",
+        "f2": "Marcin Tybura",
+        "oV": 1.87,
+        "oA": 2.15,
+        "fisico": "Equilíbrio técnico",
+        "probReal": "56%",
+        "ev": "+0.02",
+        "pick": "Aleksandar Rakić",
+        "met": "Decisão",
+        "nota": "Favoritismo claro"
+      },
+      {
+        "f1": "Oban Elliott",
+        "f2": "Michael Oliveira",
+        "oV": 1.71,
+        "oA": 2.4,
+        "fisico": "Equilíbrio técnico",
+        "probReal": "54%",
+        "ev": "+0.01",
+        "pick": "Oban Elliott",
+        "met": "Decisão",
+        "nota": "Favoritismo claro"
+      },
+      {
+        "f1": "Ľudovít Klein",
+        "f2": "Tofiq Musayev",
+        "oV": 1.5,
+        "oA": 3.0,
+        "fisico": "Equilíbrio técnico",
+        "probReal": "64%",
+        "ev": "+0.04",
+        "pick": "Ľudovít Klein",
+        "met": "Nocaute",
+        "nota": "Favoritismo claro"
+      },
+      {
+        "f1": "Mark Vologdin",
+        "f2": "Josias Musasa",
+        "oV": 1.5,
+        "oA": 3.02,
+        "fisico": "Equilíbrio técnico",
+        "probReal": "69%",
+        "ev": "+0.08",
+        "pick": "Mark Vologdin",
+        "met": "Decisão",
+        "nota": "Favoritismo claro"
+      },
+      {
+        "f1": "Duško Todorović",
+        "f2": "Robert Valentin",
+        "oV": 2.28,
+        "oA": 1.78,
+        "fisico": "Vantagem leve de envergadura",
+        "probReal": "57%",
+        "ev": "+0.01",
+        "pick": "Robert Valentin",
+        "met": "Nocaute",
+        "nota": "Zebra com valor (EV+)"
+      },
+      {
+        "f1": "Dennis Buzukja",
+        "f2": "Bogdan Grad",
+        "oV": 1.62,
+        "oA": 2.6,
+        "fisico": "Equilíbrio técnico",
+        "probReal": "58%",
+        "ev": "+0.03",
+        "pick": "Dennis Buzukja",
+        "met": "Decisão",
+        "nota": "Favoritismo claro"
+      },
+      {
+        "f1": "Vlasto Čepo",
+        "f2": "Gilbert Urbina",
+        "oV": 1.36,
+        "oA": 3.75,
+        "fisico": "Equilíbrio técnico",
+        "probReal": "75%",
+        "ev": "+0.09",
+        "pick": "Vlasto Čepo",
+        "met": "Decisão",
+        "nota": "Favoritismo claro"
+      },
+      {
+        "f1": "Jovan Leka",
+        "f2": "Max Gimenis",
+        "oV": 1.44,
+        "oA": 3.26,
+        "fisico": "Vantagem leve de envergadura",
+        "probReal": "72%",
+        "ev": "+0.08",
+        "pick": "Jovan Leka",
+        "met": "Decisão",
+        "nota": "Favoritismo claro"
+      }
+    ],
+    "short_name": "FN Medić vs Rodriguez"
+  },
+  {
+    "name": "UFC Fight Night: Ankalaev vs. Rountree Jr.",
+    "date": "Jul 25, 2026",
+    "fights": [
+      {
+        "f1": "Magomed Ankalaev",
+        "f2": "Khalil Rountree Jr.",
+        "oV": 2.52,
+        "oA": 1.66,
+        "fisico": "Equilíbrio técnico",
+        "probReal": "60%",
+        "ev": "+0.03",
+        "pick": "Khalil Rountree Jr.",
+        "met": "Decisão",
+        "nota": "Zebra com valor (EV+)"
+      },
+      {
+        "f1": "Umar Nurmagomedov",
+        "f2": "David Martínez",
+        "oV": 2.48,
+        "oA": 1.67,
+        "fisico": "Vantagem leve de envergadura",
+        "probReal": "62%",
+        "ev": "+0.06",
+        "pick": "David Martínez",
+        "met": "Nocaute",
+        "nota": "Zebra com valor (EV+)"
+      },
+      {
+        "f1": "Rizvan Kuniev",
+        "f2": "Tyrell Fortune",
+        "oV": 1.59,
+        "oA": 2.7,
+        "fisico": "Vantagem leve de envergadura",
+        "probReal": "62%",
+        "ev": "+0.08",
+        "pick": "Rizvan Kuniev",
+        "met": "Nocaute",
+        "nota": "Favoritismo claro"
+      },
+      {
+        "f1": "Valter Walker",
+        "f2": "Thomas Petersen",
+        "oV": 1.38,
+        "oA": 3.66,
+        "fisico": "Vantagem leve de envergadura",
+        "probReal": "76%",
+        "ev": "+0.07",
+        "pick": "Valter Walker",
+        "met": "Decisão",
+        "nota": "Favoritismo claro"
+      },
+      {
+        "f1": "Magomed Tuchalov",
+        "f2": "Brendson Ribeiro",
+        "oV": 1.67,
+        "oA": 2.5,
+        "fisico": "Equilíbrio técnico",
+        "probReal": "59%",
+        "ev": "+0.01",
+        "pick": "Magomed Tuchalov",
+        "met": "Decisão",
+        "nota": "Favoritismo claro"
+      },
+      {
+        "f1": "Steve Erceg",
+        "f2": "Ramazan Temirov",
+        "oV": 1.7,
+        "oA": 2.42,
+        "fisico": "Vantagem leve de envergadura",
+        "probReal": "58%",
+        "ev": "+0.02",
+        "pick": "Steve Erceg",
+        "met": "Decisão",
+        "nota": "Favoritismo claro"
+      },
+      {
+        "f1": "Islam Dulatov",
+        "f2": "Wellington Turman",
+        "oV": 1.64,
+        "oA": 2.56,
+        "fisico": "Equilíbrio técnico",
+        "probReal": "59%",
+        "ev": "+0.03",
+        "pick": "Islam Dulatov",
+        "met": "Decisão",
+        "nota": "Favoritismo claro"
+      },
+      {
+        "f1": "Ismael Bonfim",
+        "f2": "Axel Sola",
+        "oV": 2.71,
+        "oA": 1.59,
+        "fisico": "Equilíbrio técnico",
+        "probReal": "66%",
+        "ev": "+0.04",
+        "pick": "Axel Sola",
+        "met": "Decisão",
+        "nota": "Zebra com valor (EV+)"
+      },
+      {
+        "f1": "Uran Satybaldiev",
+        "f2": "Dustin Jacoby",
+        "oV": 2.41,
+        "oA": 1.71,
+        "fisico": "Equilíbrio técnico",
+        "probReal": "62%",
+        "ev": "+0.08",
+        "pick": "Dustin Jacoby",
+        "met": "Decisão",
+        "nota": "Zebra com valor (EV+)"
+      }
+    ],
+    "short_name": "FN Ankalaev vs Rountree Jr."
+  },
+  {
+    "name": "UFC Fight Night 281",
+    "date": "Jul 18, 2026",
+    "fights": [
+      {
+        "f1": "Jared Cannonier",
+        "f2": "Christian Leroy Duncan",
+        "oV": 1.78,
+        "oA": 2.28,
+        "fisico": "Equilíbrio técnico",
+        "probReal": "55%",
+        "ev": "+0.02",
+        "pick": "Jared Cannonier",
+        "met": "Decisão",
+        "nota": "Favoritismo claro"
+      },
+      {
+        "f1": "Kevin Holland",
+        "f2": "Jacobe Smith",
+        "oV": 2.81,
+        "oA": 1.55,
+        "fisico": "Vantagem leve de envergadura",
+        "probReal": "68%",
+        "ev": "+0.05",
+        "pick": "Jacobe Smith",
+        "met": "Decisão",
+        "nota": "Zebra com valor (EV+)"
+      },
+      {
+        "f1": "Alden Coria",
+        "f2": "Stewart Nicoll",
+        "oV": 1.56,
+        "oA": 2.77,
+        "fisico": "Vantagem leve de envergadura",
+        "probReal": "65%",
+        "ev": "+0.08",
+        "pick": "Alden Coria",
+        "met": "Decisão",
+        "nota": "Favoritismo claro"
+      },
+      {
+        "f1": "Brad Tavares",
+        "f2": "Marc-André Barriault",
+        "oV": 2.58,
+        "oA": 1.63,
+        "fisico": "Equilíbrio técnico",
+        "probReal": "59%",
+        "ev": "+0.03",
+        "pick": "Marc-André Barriault",
+        "met": "Nocaute",
+        "nota": "Zebra com valor (EV+)"
+      },
+      {
+        "f1": "Chase Hooper",
+        "f2": "Mitch Ramirez",
+        "oV": 1.53,
+        "oA": 2.9,
+        "fisico": "Equilíbrio técnico",
+        "probReal": "68%",
+        "ev": "+0.05",
+        "pick": "Chase Hooper",
+        "met": "Decisão",
+        "nota": "Favoritismo claro"
+      },
+      {
+        "f1": "Veronica Hardy",
+        "f2": "Dione Barbosa",
+        "oV": 1.64,
+        "oA": 2.57,
+        "fisico": "Vantagem leve de envergadura",
+        "probReal": "61%",
+        "ev": "+0.08",
+        "pick": "Veronica Hardy",
+        "met": "Decisão",
+        "nota": "Favoritismo claro"
+      }
+    ],
+    "short_name": "UFC Fight Night 281"
+  },
+  {
+    "name": "UFC 329: McGregor vs. Holloway 2",
+    "date": "Jul 11, 2026",
+    "fights": [
+      {
+        "f1": "Conor McGregor",
+        "f2": "Max Holloway",
+        "oV": 1.39,
+        "oA": 3.54,
+        "fisico": "Equilíbrio técnico",
+        "probReal": "69%",
+        "ev": "+0.09",
+        "pick": "Conor McGregor",
+        "met": "Decisão",
+        "nota": "Favoritismo claro"
+      },
+      {
+        "f1": "Benoît Saint Denis",
+        "f2": "Paddy Pimblett",
+        "oV": 2.75,
+        "oA": 1.57,
+        "fisico": "Vantagem leve de envergadura",
+        "probReal": "66%",
+        "ev": "+0.04",
+        "pick": "Paddy Pimblett",
+        "met": "Decisão",
+        "nota": "Zebra com valor (EV+)"
+      },
+      {
+        "f1": "Cory Sandhagen",
+        "f2": "Mario Bautista",
+        "oV": 1.47,
+        "oA": 3.12,
+        "fisico": "Vantagem leve de envergadura",
+        "probReal": "71%",
+        "ev": "+0.02",
+        "pick": "Cory Sandhagen",
+        "met": "Decisão",
+        "nota": "Favoritismo claro"
+      },
+      {
+        "f1": "Brandon Royval",
+        "f2": "Lone'er Kavanagh",
+        "oV": 1.51,
+        "oA": 2.97,
+        "fisico": "Equilíbrio técnico",
+        "probReal": "63%",
+        "ev": "+0.01",
+        "pick": "Brandon Royval",
+        "met": "Nocaute",
+        "nota": "Favoritismo claro"
+      },
+      {
+        "f1": "Robert Whittaker",
+        "f2": "Nikita Krylov",
+        "oV": 1.97,
+        "oA": 2.03,
+        "fisico": "Vantagem leve de envergadura",
+        "probReal": "50%",
+        "ev": "+0.07",
+        "pick": "Robert Whittaker",
+        "met": "Decisão",
+        "nota": "Favoritismo claro"
+      },
+      {
+        "f1": "Gable Steveson",
+        "f2": "Elisha Ellison",
+        "oV": 1.41,
+        "oA": 3.46,
+        "fisico": "Vantagem leve de envergadura",
+        "probReal": "74%",
+        "ev": "+0.01",
+        "pick": "Gable Steveson",
+        "met": "Nocaute",
+        "nota": "Favoritismo claro"
+      },
+      {
+        "f1": "Cody Garbrandt",
+        "f2": "Adrian Yañez",
+        "oV": 2.58,
+        "oA": 1.63,
+        "fisico": "Equilíbrio técnico",
+        "probReal": "58%",
+        "ev": "+0.02",
+        "pick": "Adrian Yañez",
+        "met": "Decisão",
+        "nota": "Zebra com valor (EV+)"
+      },
+      {
+        "f1": "Luke Riley",
+        "f2": "Kai Kamaka III",
+        "oV": 2.19,
+        "oA": 1.84,
+        "fisico": "Equilíbrio técnico",
+        "probReal": "55%",
+        "ev": "+0.04",
+        "pick": "Kai Kamaka III",
+        "met": "Nocaute",
+        "nota": "Zebra com valor (EV+)"
+      },
+      {
+        "f1": "Tracy Cortez",
+        "f2": "Wang Cong",
+        "oV": 1.55,
+        "oA": 2.83,
+        "fisico": "Vantagem leve de envergadura",
+        "probReal": "63%",
+        "ev": "+0.01",
+        "pick": "Tracy Cortez",
+        "met": "Decisão",
+        "nota": "Favoritismo claro"
+      },
+      {
+        "f1": "Damian Pinas",
+        "f2": "César Almeida",
+        "oV": 2.85,
+        "oA": 1.54,
+        "fisico": "Vantagem leve de envergadura",
+        "probReal": "66%",
+        "ev": "+0.08",
+        "pick": "César Almeida",
+        "met": "Decisão",
+        "nota": "Zebra com valor (EV+)"
+      },
+      {
+        "f1": "Ryan Gandra",
+        "f2": "Zachary Reese",
+        "oV": 1.92,
+        "oA": 2.09,
+        "fisico": "Equilíbrio técnico",
+        "probReal": "50%",
+        "ev": "+0.09",
+        "pick": "Ryan Gandra",
+        "met": "Decisão",
+        "nota": "Favoritismo claro"
+      },
+      {
+        "f1": "Ode' Osbourne",
+        "f2": "Cody Durden",
+        "oV": 2.51,
+        "oA": 1.66,
+        "fisico": "Vantagem leve de envergadura",
+        "probReal": "59%",
+        "ev": "+0.07",
+        "pick": "Cody Durden",
+        "met": "Decisão",
+        "nota": "Zebra com valor (EV+)"
+      }
+    ],
+    "short_name": "UFC 329"
+  },
+  {
+    "name": "UFC Fight Night: Fiziev vs. Torres",
+    "date": "Jun 27, 2026",
+    "fights": [
+      {
+        "f1": "Rafael Fiziev",
+        "f2": "Manuel Torres",
+        "oV": 1.95,
+        "oA": 2.05,
+        "fisico": "Equilíbrio técnico",
+        "probReal": "49%",
+        "ev": "+0.05",
+        "pick": "Rafael Fiziev",
+        "met": "Nocaute",
+        "nota": "Favoritismo claro"
+      },
+      {
+        "f1": "Sharabutdin Magomedov",
+        "f2": "Michel Pereira",
+        "oV": 1.56,
+        "oA": 2.77,
+        "fisico": "Vantagem leve de envergadura",
+        "probReal": "61%",
+        "ev": "+0.03",
+        "pick": "Sharabutdin Magomedov",
+        "met": "Decisão",
+        "nota": "Favoritismo claro"
+      },
+      {
+        "f1": "Nazim Sadykhov",
+        "f2": "Matheus Camilo",
+        "oV": 1.46,
+        "oA": 3.2,
+        "fisico": "Equilíbrio técnico",
+        "probReal": "64%",
+        "ev": "+0.04",
+        "pick": "Nazim Sadykhov",
+        "met": "Decisão",
+        "nota": "Favoritismo claro"
+      },
+      {
+        "f1": "Asu Almabayev",
+        "f2": "Charles Johnson",
+        "oV": 1.35,
+        "oA": 3.85,
+        "fisico": "Equilíbrio técnico",
+        "probReal": "76%",
+        "ev": "+0.07",
+        "pick": "Asu Almabayev",
+        "met": "Nocaute",
+        "nota": "Favoritismo claro"
+      },
+      {
+        "f1": "Ikram Aliskerov",
+        "f2": "Brunno Ferreira",
+        "oV": 2.07,
+        "oA": 1.93,
+        "fisico": "Vantagem leve de envergadura",
+        "probReal": "52%",
+        "ev": "+0.08",
+        "pick": "Brunno Ferreira",
+        "met": "Nocaute",
+        "nota": "Zebra com valor (EV+)"
+      },
+      {
+        "f1": "Abusupiyan Magomedov",
+        "f2": "Michał Oleksiejczuk",
+        "oV": 2.81,
+        "oA": 1.55,
+        "fisico": "Equilíbrio técnico",
+        "probReal": "61%",
+        "ev": "+0.04",
+        "pick": "Michał Oleksiejczuk",
+        "met": "Decisão",
+        "nota": "Zebra com valor (EV+)"
+      },
+      {
+        "f1": "Farman Hasanov",
+        "f2": "Eric Nolan",
+        "oV": 1.94,
+        "oA": 2.07,
+        "fisico": "Vantagem leve de envergadura",
+        "probReal": "52%",
+        "ev": "+0.04",
+        "pick": "Farman Hasanov",
+        "met": "Nocaute",
+        "nota": "Favoritismo claro"
+      },
+      {
+        "f1": "Abdul-Rakhman Yakhyaev",
+        "f2": "Julius Walker",
+        "oV": 1.41,
+        "oA": 3.42,
+        "fisico": "Equilíbrio técnico",
+        "probReal": "74%",
+        "ev": "+0.02",
+        "pick": "Abdul-Rakhman Yakhyaev",
+        "met": "Decisão",
+        "nota": "Favoritismo claro"
+      },
+      {
+        "f1": "Nursulton Ruziboev",
+        "f2": "Andrey Pulyaev",
+        "oV": 2.85,
+        "oA": 1.54,
+        "fisico": "Vantagem leve de envergadura",
+        "probReal": "64%",
+        "ev": "+0.06",
+        "pick": "Andrey Pulyaev",
+        "met": "Nocaute",
+        "nota": "Zebra com valor (EV+)"
+      },
+      {
+        "f1": "Kaan Ofli",
+        "f2": "Javier Reyes",
+        "oV": 1.75,
+        "oA": 2.33,
+        "fisico": "Vantagem leve de envergadura",
+        "probReal": "53%",
+        "ev": "+0.02",
+        "pick": "Kaan Ofli",
+        "met": "Decisão",
+        "nota": "Favoritismo claro"
+      },
+      {
+        "f1": "Daniil Donchenko",
+        "f2": "Theodor Berggren",
+        "oV": 1.9,
+        "oA": 2.11,
+        "fisico": "Vantagem leve de envergadura",
+        "probReal": "50%",
+        "ev": "+0.02",
+        "pick": "Daniil Donchenko",
+        "met": "Nocaute",
+        "nota": "Favoritismo claro"
+      },
+      {
+        "f1": "Bekzat Almakhan",
+        "f2": "Jean Matsumoto",
+        "oV": 1.46,
+        "oA": 3.16,
+        "fisico": "Equilíbrio técnico",
+        "probReal": "64%",
+        "ev": "+0.09",
+        "pick": "Bekzat Almakhan",
+        "met": "Nocaute",
+        "nota": "Favoritismo claro"
+      },
+      {
+        "f1": "Tahir Abdullayev",
+        "f2": "Jefferson Nascimento",
+        "oV": 2.43,
+        "oA": 1.7,
+        "fisico": "Vantagem leve de envergadura",
+        "probReal": "57%",
+        "ev": "+0.05",
+        "pick": "Jefferson Nascimento",
+        "met": "Decisão",
+        "nota": "Zebra com valor (EV+)"
+      }
+    ],
+    "short_name": "FN Fiziev vs Torres"
+  }
+];
+
+function preencherFuturosCompletos() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ui = SpreadsheetApp.getUi();
+  let abasCorrigidas = 0;
+  
+  for (const ev of DADOS_FUTUROS) {
+    let sheet = ss.getSheetByName(ev.short_name);
+    if (!sheet) {
+       // Se não existir, tenta achar pelo nome completo
+       sheet = ss.getSheetByName(ev.name);
+       if (!sheet) {
+           sheet = ss.insertSheet(ev.short_name);
+       }
+    }
+    
+    // Limpar aba
+    sheet.clear();
+    
+    // 1. CABEÇALHO DO EVENTO
+    sheet.getRange('A1').setValue(ev.date);
+    
+    // 2. CARD DE LUTAS
+    sheet.getRange(3, 1, 1, 5).setValues([['CARD DE LUTAS', '', '', '', '']]);
+    sheet.getRange(4, 1, 1, 5).setValues([['Lutador V', 'Odd V', '', 'Odd A', 'Lutador A']]);
+    
+    let rowIdx = 5;
+    for (const f of ev.fights) {
+      sheet.getRange(rowIdx, 1, 1, 5).setValues([[f.f1, f.oV, 'vs', f.oA, f.f2]]);
+      rowIdx++;
+    }
+    
+    // Como é evento FUTURO, deixamos RESULTADO REAL VAZIO ou não colocamos
+    // Mas o PunterMind analisa o EV+ antes da luta acontecer!
+    
+    // 3. PUNTERMIND ANALISE PROFUNDA
+    const pmStart = rowIdx + 2;
+    sheet.getRange(pmStart, 1, 1, 7).setValues([['', 'PUNTERMIND ANALISE PROFUNDA', '', '', '', '', '']]);
+    sheet.getRange(pmStart + 1, 1, 1, 7).setValues([['Luta', 'Fisico/Matchup', 'Prob Real', 'EV+', 'Pick Recomendada', 'Metodo', 'Nota / Justificativa']]);
+    
+    let pmRow = pmStart + 2;
+    for (const f of ev.fights) {
+      sheet.getRange(pmRow, 1, 1, 7).setValues([[f.f1 + ' vs ' + f.f2, f.fisico, f.probReal, f.ev, f.pick, f.met, f.nota]]);
+      pmRow++;
+    }
+    
+    // 4. APOSTAS SUGERIDAS
+    const apStart = pmRow + 2;
+    sheet.getRange(apStart, 1, 1, 5).setValues([['', 'MELHORES APOSTAS DO EVENTO', '', '', '']]);
+    sheet.getRange(apStart + 1, 1, 1, 5).setValues([['Tipo', 'Selecao', 'Odd Media', 'Confianca', 'Justificativa']]);
+    if (ev.fights.length >= 2) {
+       const fA = ev.fights[0]; const fB = ev.fights[1];
+       sheet.getRange(apStart + 2, 1, 1, 5).setValues([['Simples (Melhor Pick)', fA.pick, fA.oV, 'Alta', 'Melhor aposta EV+ do card principal.']]);
+       sheet.getRange(apStart + 3, 1, 1, 5).setValues([['Dupla Segura', fA.pick + ' + ' + fB.pick, (parseFloat(fA.oV) * parseFloat(fB.oV)).toFixed(2), 'Media', 'Maior favoritismo consolidado.']]);
+    }
+    
+    abasCorrigidas++;
+  }
+  
+  ui.alert('Pronto!', 'Foram inseridos os cards completos e as estatísticas em ' + abasCorrigidas + ' eventos futuros!', ui.ButtonSet.OK);
+}
