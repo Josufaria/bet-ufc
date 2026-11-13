@@ -1562,7 +1562,11 @@ function renderMyBetsHistory() {
 function setQuickFilter(mode) {
   _cardFilter.quick = mode;
   document.querySelectorAll('.qf-btn').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.qf === mode);
+    const active = btn.dataset.qf === mode;
+    btn.classList.toggle('active', active);
+    if (active && typeof btn.scrollIntoView === 'function') {
+      try { btn.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' }); } catch (e) {}
+    }
   });
   renderEvento();
 }
@@ -2256,7 +2260,11 @@ function switchTab(tabId) {
 function switchHistSubTab(subTab) {
   _currentHistSubTab = subTab || 'overview';
   document.querySelectorAll('.hist-subtab').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.htab === _currentHistSubTab);
+    const active = btn.dataset.htab === _currentHistSubTab;
+    btn.classList.toggle('active', active);
+    if (active && typeof btn.scrollIntoView === 'function') {
+      try { btn.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' }); } catch (e) {}
+    }
   });
   document.querySelectorAll('[data-hist-group]').forEach(sec => {
     const grp = sec.dataset.histGroup;

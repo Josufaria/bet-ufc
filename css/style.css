@@ -51,12 +51,14 @@
 
 /* ── RESET & BASE ─────────────────────────────────────────────── */
 *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
-html { scroll-behavior: smooth; font-size: 16px; }
+html { scroll-behavior: smooth; font-size: 16px; width: 100%; max-width: 100%; overflow-x: hidden; }
 body {
   background: var(--bg);
   color: var(--text);
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
   min-height: 100vh;
+  width: 100%;
+  max-width: 100%;
   overflow-x: hidden;
   line-height: 1.5;
 }
@@ -333,12 +335,19 @@ nav {
 #main-content {
   position: relative;
   z-index: 1;
+  width: 100%;
   max-width: 1280px;
+  min-width: 0;
   margin: 0 auto;
   padding: 0 20px 80px;
 }
 
-.section { margin-top: 60px; }
+.section { margin-top: 60px; width: 100%; max-width: 100%; min-width: 0; }
+#tab-content-cards, #tab-content-historico, #fight-cards-section, #fight-cards-container {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
 
 .section-header {
   display: flex;
@@ -382,7 +391,11 @@ nav {
 /* ── FIGHT CARDS ─────────────────────────────────────────────── */
 .fight-cards-grid {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 16px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .fight-card {
@@ -1764,17 +1777,27 @@ footer a:hover { text-decoration: underline; }
 }
 .cards-toolbar {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  flex-direction: column;
+  align-items: stretch;
   gap: 12px;
-  flex-wrap: wrap;
   margin-bottom: 16px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+.cards-search-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
 }
 .cards-search-wrap {
   position: relative;
-  flex: 1;
-  min-width: 220px;
-  max-width: 380px;
+  flex: 1 1 240px;
+  min-width: 0;
+  max-width: 100%;
 }
 .cards-search-icon {
   position: absolute;
@@ -1798,12 +1821,59 @@ footer a:hover { text-decoration: underline; }
 #card-search-input:focus {
   border-color: var(--cyan);
 }
+.qf-bar-wrap {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 14px 8px;
+}
+.qf-bar-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text3);
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.qf-bar-label::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
 .qf-group {
   display: flex;
   gap: 8px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  padding-bottom: 6px;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.10) transparent;
+}
+.qf-group::-webkit-scrollbar { height: 3px; }
+.qf-group::-webkit-scrollbar-track { background: transparent; }
+.qf-group::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.10);
+  border-radius: 2px;
 }
 .qf-btn {
+  flex-shrink: 0;
+  white-space: nowrap;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -2121,14 +2191,36 @@ footer a:hover { text-decoration: underline; }
   white-space: nowrap;
 }
 
-.hist-subtabs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+.hist-subtabs-wrap {
   margin-top: 20px;
   margin-bottom: 8px;
 }
+.hist-subtabs {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 8px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  padding-bottom: 6px;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.10) transparent;
+}
+.hist-subtabs::-webkit-scrollbar { height: 3px; }
+.hist-subtabs::-webkit-scrollbar-track { background: transparent; }
+.hist-subtabs::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.10);
+  border-radius: 2px;
+}
 .hist-subtab {
+  flex-shrink: 0;
+  white-space: nowrap;
   background: var(--card);
   border: 1px solid var(--border);
   color: var(--text2);
@@ -2330,6 +2422,10 @@ footer a:hover { text-decoration: underline; }
   .ev-picker-section {
     margin-top: 14px;
     padding: 12px;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow: hidden;
   }
   .ev-picker-header {
     flex-wrap: wrap;
@@ -2342,10 +2438,20 @@ footer a:hover { text-decoration: underline; }
     width: 100%;
     font-size: 11px;
   }
+  .ev-picker-bar,
+  .ev-picker-group,
+  .qf-bar-wrap {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow: hidden !important;
+  }
   .ev-picker-bar {
     flex-direction: column;
-    overflow: visible;
     padding-bottom: 0;
+  }
+  .qf-bar-wrap {
+    padding: 10px 10px 6px;
   }
   .ev-pill {
     padding: 6px 11px;
@@ -2354,12 +2460,18 @@ footer a:hover { text-decoration: underline; }
     flex-shrink: 0;
   }
 
-  /* Toolbar de Busca + Filtros Rápidos (CORRIGE flex-basis vertical gigante) */
-  .cards-toolbar {
+  /* Toolbar de Busca + Filtros Rápidos (Carrossel independente sem mover a página) */
+  .cards-toolbar,
+  .cards-search-row {
     display: flex;
     flex-direction: column;
     align-items: stretch;
     gap: 8px;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+  .cards-toolbar {
     margin-bottom: 14px;
   }
   .cards-search-wrap,
@@ -2376,17 +2488,25 @@ footer a:hover { text-decoration: underline; }
     font-size: 13px;
   }
   .qf-group,
-  .hist-subtabs {
-    display: flex;
-    flex-wrap: nowrap;
-    overflow-x: auto;
+  .hist-subtabs,
+  .ev-pills-row {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
     -webkit-overflow-scrolling: touch;
+    touch-action: pan-x;
+    overscroll-behavior-x: contain;
     scrollbar-width: none;
     gap: 6px;
     padding-bottom: 4px;
   }
   .qf-group::-webkit-scrollbar,
-  .hist-subtabs::-webkit-scrollbar {
+  .hist-subtabs::-webkit-scrollbar,
+  .ev-pills-row::-webkit-scrollbar {
     display: none;
   }
   .qf-btn,

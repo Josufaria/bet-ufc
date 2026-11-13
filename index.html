@@ -7,7 +7,7 @@
   <meta name="description" content="Análise profissional de lutas UFC com probabilidades ajustadas por altura, envergadura, estilo de luta e detector de zebras. Picks EV+ com dados históricos reais.">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🥊</text></svg>">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css?v=12">
+  <link rel="stylesheet" href="css/style.css?v=14">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 </head>
 <body>
@@ -122,24 +122,29 @@
       </div>
 
       <div id="cards-toolbar" class="cards-toolbar">
-        <div class="cards-search-wrap">
-          <span class="cards-search-icon">🔍</span>
-          <input type="search" id="card-search-input" placeholder="Buscar lutador ou categoria no card…" autocomplete="off" />
+        <div class="cards-search-row">
+          <div class="cards-search-wrap">
+            <span class="cards-search-icon">🔍</span>
+            <input type="search" id="card-search-input" placeholder="Buscar lutador ou categoria no card…" autocomplete="off" />
+          </div>
+          <div class="global-fighter-search-wrap">
+            <span class="cards-search-icon">🌎</span>
+            <input type="search" id="global-fighter-input" placeholder="Raio-X Global de Lutador (4.287 atletas)…" autocomplete="off" />
+            <div id="global-fighter-dropdown" class="global-fighter-dropdown" style="display:none"></div>
+          </div>
         </div>
-        <div class="global-fighter-search-wrap">
-          <span class="cards-search-icon">🌎</span>
-          <input type="search" id="global-fighter-input" placeholder="Raio-X Global de Lutador (4.287 atletas)…" autocomplete="off" />
-          <div id="global-fighter-dropdown" class="global-fighter-dropdown" style="display:none"></div>
-        </div>
-        <div class="qf-group">
-          <button type="button" class="qf-btn active" data-qf="all">Todas <span class="qf-count">0</span></button>
-          <button type="button" class="qf-btn" data-qf="precision">🎯 Alta Precisão <span class="qf-count">0</span></button>
-          <button type="button" class="qf-btn" data-qf="ev">EV+ 🔥 <span class="qf-count">0</span></button>
-          <button type="button" class="qf-btn" data-qf="zebra">Zebras 🦓 <span class="qf-count">0</span></button>
-          <button type="button" class="qf-btn" data-qf="ko">🥊 KO/TKO <span class="qf-count">0</span></button>
-          <button type="button" class="qf-btn" data-qf="sub">🥋 SUB <span class="qf-count">0</span></button>
-          <button type="button" class="qf-btn" data-qf="dec">📋 DEC <span class="qf-count">0</span></button>
-          <button type="button" class="qf-btn" data-qf="ticket">Meus Palpites 🎟️ <span class="qf-count">0</span></button>
+        <div class="qf-bar-wrap">
+          <div class="qf-bar-label">⚡ Filtrar Lutas do Card</div>
+          <div class="qf-group" id="qf-group">
+            <button type="button" class="qf-btn active" data-qf="all">Todas <span class="qf-count">0</span></button>
+            <button type="button" class="qf-btn" data-qf="precision">🎯 Alta Precisão <span class="qf-count">0</span></button>
+            <button type="button" class="qf-btn" data-qf="ev">EV+ 🔥 <span class="qf-count">0</span></button>
+            <button type="button" class="qf-btn" data-qf="zebra">Zebras 🦓 <span class="qf-count">0</span></button>
+            <button type="button" class="qf-btn" data-qf="ko">🥊 KO/TKO <span class="qf-count">0</span></button>
+            <button type="button" class="qf-btn" data-qf="sub">🥋 SUB <span class="qf-count">0</span></button>
+            <button type="button" class="qf-btn" data-qf="dec">📋 DEC <span class="qf-count">0</span></button>
+            <button type="button" class="qf-btn" data-qf="ticket">Meus Palpites 🎟️ <span class="qf-count">0</span></button>
+          </div>
         </div>
       </div>
 
@@ -227,12 +232,15 @@
        ABA 2: HISTÓRICO E PERFORMANCE ACUMULADA
        ══════════════════════════════════════════ -->
   <div id="tab-content-historico" style="display:none">
-    <div class="hist-subtabs" id="hist-subtabs">
-      <button type="button" class="hist-subtab active" data-htab="overview" onclick="switchHistSubTab('overview')">📊 Visão Geral & ROI</button>
-      <button type="button" class="hist-subtab" data-htab="events" onclick="switchHistSubTab('events')">📋 Auditoria por Evento</button>
-      <button type="button" class="hist-subtab" data-htab="mybets" onclick="switchHistSubTab('mybets')">🎟️ Minhas Apostas</button>
-      <button type="button" class="hist-subtab" data-htab="styles" onclick="switchHistSubTab('styles')">🦓 Zebras & Estilos</button>
-      <button type="button" class="hist-subtab" data-htab="all" onclick="switchHistSubTab('all')">🌎 Ver Tudo</button>
+    <div class="qf-bar-wrap hist-subtabs-wrap">
+      <div class="qf-bar-label">📊 Navegar pelo Histórico</div>
+      <div class="hist-subtabs" id="hist-subtabs">
+        <button type="button" class="hist-subtab active" data-htab="overview" onclick="switchHistSubTab('overview')">📊 Visão Geral & ROI</button>
+        <button type="button" class="hist-subtab" data-htab="events" onclick="switchHistSubTab('events')">📋 Auditoria por Evento</button>
+        <button type="button" class="hist-subtab" data-htab="mybets" onclick="switchHistSubTab('mybets')">🎟️ Minhas Apostas</button>
+        <button type="button" class="hist-subtab" data-htab="styles" onclick="switchHistSubTab('styles')">🦓 Zebras & Estilos</button>
+        <button type="button" class="hist-subtab" data-htab="all" onclick="switchHistSubTab('all')">🌎 Ver Tudo</button>
+      </div>
     </div>
 
     <!-- PERFORMANCE HISTÓRICA ─────────────── -->
@@ -416,11 +424,11 @@
 <!-- ══════════════════════════════════════════
      SCRIPTS (ordem importa!)
      ══════════════════════════════════════════ -->
-<script src="js/fighters-db.js?v=12"></script>
-<script src="js/events-db.js?v=12"></script>
-<script src="js/analyzer.js?v=12"></script>
-<script src="js/ai-integration.js?v=12"></script>
-<script src="js/app.js?v=12"></script>
+<script src="js/fighters-db.js?v=14"></script>
+<script src="js/events-db.js?v=14"></script>
+<script src="js/analyzer.js?v=14"></script>
+<script src="js/ai-integration.js?v=14"></script>
+<script src="js/app.js?v=14"></script>
 
 </body>
 </html>
