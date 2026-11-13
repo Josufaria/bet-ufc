@@ -48,11 +48,11 @@ const inchToCm = (inch) => (inch ? Math.round(inch * 2.54) : null);
  * na ESPN Core API, dado o seu ESPN athlete ID. Usa cache em memória de 7 dias.
  *
  * @param {string} fighterId - ID numérico do atleta na ESPN
- * @returns {Promise<object>} { height_cm, reach_cm, stance, wins, losses, draws }
+ * @returns {Promise<object>} { height_cm, reach_cm, stance, age, wins, losses, draws }
  */
 async function fetchFighterPhysicalData(fighterId) {
   if (!fighterId) {
-    return { height_cm: null, reach_cm: null, stance: '', wins: null, losses: null, draws: 0 };
+    return { height_cm: null, reach_cm: null, stance: '', age: null, wins: null, losses: null, draws: 0 };
   }
 
   const cached = cache.get(fighterId);
@@ -60,7 +60,7 @@ async function fetchFighterPhysicalData(fighterId) {
     return cached.data;
   }
 
-  let height_cm = null, reach_cm = null, stance = '';
+  let height_cm = null, reach_cm = null, stance = '', age = null;
   let wins = null, losses = null, draws = 0;
 
   try {
@@ -77,6 +77,19 @@ async function fetchFighterPhysicalData(fighterId) {
         stance = athleteData.position.text;
       } else if (athleteData.displayStance) {
         stance = athleteData.displayStance;
+      }
+
+      if (Number.isFinite(Number(athleteData.age)) && Number(athleteData.age) > 15) {
+        age = Number(athleteData.age);
+      } else if (athleteData.dateOfBirth) {
+        const dob = new Date(athleteData.dateOfBirth);
+        if (!isNaN(dob.getTime())) {
+          const now = new Date();
+          let a = now.getUTCFullYear() - dob.getUTCFullYear();
+          const m = now.getUTCMonth() - dob.getUTCMonth();
+          if (m < 0 || (m === 0 && now.getUTCDate() < dob.getUTCDate())) a--;
+          if (a > 15 && a < 65) age = a;
+        }
       }
 
       // Busca o cartel (wins/losses/draws), também com timeout próprio
@@ -107,7 +120,7 @@ async function fetchFighterPhysicalData(fighterId) {
     console.warn(`[ESPN Fetcher] Falha ao buscar dados de ${fighterId}:`, err.message);
   }
 
-  const data = { height_cm, reach_cm, stance, wins, losses, draws };
+  const data = { height_cm, reach_cm, stance, age, wins, losses, draws };
   cache.set(fighterId, { data, ts: Date.now() });
   return data;
 }

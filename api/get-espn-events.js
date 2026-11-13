@@ -93,7 +93,7 @@ module.exports = async function handler(req, res) {
             reach_cm: Number(local.reach_cm) || 0,
             stance: local.stance || '',
             style: local.style || 'MMA',
-            age: Number(local.age) || 0,
+            age: Number(athlete.age) || Number(local.age) || 0,
             wins: recNums.wins || Number(local.wins) || 0,
             losses: recNums.losses || Number(local.losses) || 0,
             draws: recNums.draws || Number(local.draws) || 0

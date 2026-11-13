@@ -381,7 +381,8 @@ async function fetchPublicEspnScoreboardDirect() {
             height_cm: local.height_cm || 0,
             reach_cm: local.reach_cm || 0,
             stance: local.stance || '',
-            style: local.style || 'MMA'
+            style: local.style || 'MMA',
+            age: Number(ath.age) || Number(local.age) || 0
           };
         });
         const state = comp.status?.type?.state || 'pre';
@@ -1853,6 +1854,7 @@ function buildFightCard(c, ev, idx, preAnalysis = null, preDbA = null, preDbB = 
       height_cm: (espnFighter.height_cm && Number(espnFighter.height_cm) > 0) ? Number(espnFighter.height_cm) : base.height_cm,
       reach_cm: (espnFighter.reach_cm && Number(espnFighter.reach_cm) > 0) ? Number(espnFighter.reach_cm) : base.reach_cm,
       stance: espnFighter.stance || base.stance || '',
+      age: (espnFighter.age && Number(espnFighter.age) > 0) ? Number(espnFighter.age) : base.age,
       espn_photo: espnFighter.photo || base.espn_photo || null,
       style: base.style || espnFighter.style || ''
     };
@@ -1873,7 +1875,13 @@ function buildFightCard(c, ev, idx, preAnalysis = null, preDbA = null, preDbB = 
 
   // Formatadores seguros (nunca geram NaNm)
   const hasRec = db => db && Number.isFinite(Number(db.wins)) && (Number(db.wins) > 0 || Number(db.losses) > 0);
-  const fRecord = db => hasRec(db) ? `${db.wins}-${db.losses}${db.draws > 0 ? '-' + db.draws : ''}` : '—';
+  const fRecord = db => hasRec(db)
+    ? `${db.wins}-${db.losses}${db.draws > 0 ? '-' + db.draws : ''}`
+    : (db?.ufc_recent ? `${db.ufc_recent} UFC` : '—');
+  const fAge = db => {
+    const a = parseInt(db?.age, 10);
+    return Number.isFinite(a) && a >= 18 && a <= 60 ? `${a} anos` : '—';
+  };
   const fHeight = db => {
     const h = parseFloat(db?.height_cm);
     return Number.isFinite(h) && h > 50 ? `${(h / 100).toFixed(2)}m` : '—';
@@ -1885,9 +1893,15 @@ function buildFightCard(c, ev, idx, preAnalysis = null, preDbA = null, preDbB = 
   const fStance = db => (db && db.stance) ? db.stance : '—';
 
   const rV = fRecord(dbA), rA = fRecord(dbB);
+  const aV = fAge(dbA), aA = fAge(dbB);
   const hV = fHeight(dbA), hA = fHeight(dbB);
   const eV = fReach(dbA), eA = fReach(dbB);
   const sV = fStance(dbA), sA = fStance(dbB);
+
+  const ageNumV = parseInt(dbA?.age, 10) || 0, ageNumA = parseInt(dbB?.age, 10) || 0;
+  const ageDiffFactor = (typeof calcAgeFactor === 'function' && ageNumV > 0 && ageNumA > 0) ? calcAgeFactor(ageNumV, ageNumA) : 0;
+  const aAdvV = ageDiffFactor > 0 || (ageDiffFactor === 0 && ageNumV > 0 && ageNumA > 0 && Math.abs(ageNumV - 29.5) + 1.5 < Math.abs(ageNumA - 29.5));
+  const aAdvA = ageDiffFactor < 0 || (ageDiffFactor === 0 && ageNumV > 0 && ageNumA > 0 && Math.abs(ageNumA - 29.5) + 1.5 < Math.abs(ageNumV - 29.5));
 
   const hNumV = parseFloat(dbA?.height_cm) || 0, hNumA = parseFloat(dbB?.height_cm) || 0;
   const rNumV = parseFloat(dbA?.reach_cm) || 0,  rNumA = parseFloat(dbB?.reach_cm) || 0;
@@ -1976,6 +1990,10 @@ function buildFightCard(c, ev, idx, preAnalysis = null, preDbA = null, preDbB = 
   const segLabel = c.cardSegment || (idx === 0 ? 'Main Event' : idx === 1 ? 'Co-Main' : '');
   const styleVTag = `<span class="fc-style-tag">${escHtml(dbA?.style || 'MMA')}</span>`;
   const styleATag = `<span class="fc-style-tag">${escHtml(dbB?.style || 'MMA')}</span>`;
+  const metaVParts = [rV !== '—' ? rV : null, aV !== '—' ? aV : null].filter(Boolean);
+  const metaAParts = [rA !== '—' ? rA : null, aA !== '—' ? aA : null].filter(Boolean);
+  const metaVHtml = `<div class="fc-fighter-meta" title="Cartel · Idade">${metaVParts.length ? escHtml(metaVParts.join(' · ')) : '—'}</div>`;
+  const metaAHtml = `<div class="fc-fighter-meta" title="Cartel · Idade">${metaAParts.length ? escHtml(metaAParts.join(' · ')) : '—'}</div>`;
 
   // Botão de IA
   const aiBtnId = `ai-btn-${idx}`;
@@ -2001,6 +2019,7 @@ function buildFightCard(c, ev, idx, preAnalysis = null, preDbA = null, preDbB = 
             ${renderPhoto(photoV, fV)}
             <div class="tale-name fc-fighter-trigger" ${fV ? `data-fighter="${escHtml(fV)}" title="Ver histórico de ${escHtml(fV)}"` : ''}>${escHtml(fV || '—')}</div>
             ${styleVTag}
+            ${metaVHtml}
             ${oddsVHtml}
           </div>
           <div class="tale-fighter-actions">
@@ -2014,6 +2033,11 @@ function buildFightCard(c, ev, idx, preAnalysis = null, preDbA = null, preDbB = 
             <span class="val left">${rV}</span>
             <span class="lbl">CARTEL</span>
             <span class="val right">${rA}</span>
+          </div>
+          <div class="tale-row">
+            <span class="val left ${aAdvV ? 'adv' : ''}">${aV}</span>
+            <span class="lbl">IDADE</span>
+            <span class="val right ${aAdvA ? 'adv' : ''}">${aA}</span>
           </div>
           <div class="tale-row">
             <span class="val left ${hAdvV ? 'adv' : ''}">${hV}</span>
@@ -2037,6 +2061,7 @@ function buildFightCard(c, ev, idx, preAnalysis = null, preDbA = null, preDbB = 
             ${renderPhoto(photoA, fA)}
             <div class="tale-name fc-fighter-trigger" ${fA ? `data-fighter="${escHtml(fA)}" title="Ver histórico de ${escHtml(fA)}"` : ''}>${escHtml(fA || '—')}</div>
             ${styleATag}
+            ${metaAHtml}
             ${oddsAHtml}
           </div>
           <div class="tale-fighter-actions">
@@ -2585,7 +2610,8 @@ function renderFighterProfileSummary(name, data) {
   const streakTxt = streak > 0 ? `+${streak}W` : streak < 0 ? `${streak}L` : '0';
   const rec = (data && data.wins != null && data.losses != null)
     ? `${data.wins}-${data.losses}${data.draws ? '-' + data.draws : ''}`
-    : '—';
+    : (data?.ufc_recent ? `${data.ufc_recent} UFC` : '—');
+  const ageTxt = (data && Number(data.age) >= 18 && Number(data.age) <= 60) ? `${data.age} anos` : '—';
   const styleTxt = (data && data.style) || 'MMA';
   const stanceTxt = (data && data.stance) || '—';
   const hNum = parseFloat(data?.height_cm);
@@ -2646,6 +2672,7 @@ function renderFighterProfileSummary(name, data) {
   sumEl.innerHTML = `
     <div class="fp-kpis">
       <div class="fp-kpi"><span>Cartel</span><strong>${escHtml(rec)}</strong></div>
+      <div class="fp-kpi"><span>Idade</span><strong>${escHtml(ageTxt)}</strong></div>
       <div class="fp-kpi"><span>Rating Elo</span><strong style="color:var(--cyan)">${elo}</strong></div>
       <div class="fp-kpi"><span>Sequência</span><strong>${streakTxt}</strong></div>
       <div class="fp-kpi"><span>Via Rápida</span><strong>${escHtml(koSubTxt)}</strong></div>

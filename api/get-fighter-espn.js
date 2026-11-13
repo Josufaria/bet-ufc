@@ -63,6 +63,7 @@ module.exports = async (req, res) => {
       height_cm: physical.height_cm || 0,
       reach_cm: physical.reach_cm || 0,
       stance: physical.stance,
+      age: physical.age || null,
       wins: physical.wins,
       losses: physical.losses,
       draws: physical.draws
