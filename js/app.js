@@ -863,21 +863,21 @@ function computeOddsCatsGeral() {
 function computeOddsCatsPick() {
   const stats = {};
   ODDS_CATS.forEach(c => { stats[c.key] = { picks: 0, acertos: 0, roi: 0 }; });
-  _eventos.forEach(ev => {
-    (ev.cardLutas || []).forEach(c => {
-      [[c.fV, c.oV], [c.fA, c.oA]].forEach(([name, odds]) => {
-        if (!name || !odds || odds <= 1.0 || odds > 20) return;
-        const cat = getOddsCat(odds);
-        if (!cat) return;
-        const pickL = name.toLowerCase().split(' ').pop();
-        const luta = ev.lutas.find(l => l.luta.toLowerCase().includes(pickL));
-        if (!luta || !luta.resultado) return;
-        if (NULO.some(x => luta.resultado.toUpperCase().includes(x))) return;
-        stats[cat.key].picks++;
-        const acertou = luta.resultado.toLowerCase().includes(pickL);
-        stats[cat.key].roi += acertou ? (odds - 1) : -1;
-        if (acertou) stats[cat.key].acertos++;
-      });
+  _eventos.filter(e => !e.isFuturo).forEach(ev => {
+    (ev.punterAnalise || []).forEach(pm => {
+      if (!pm.pick) return;
+      const luta = findLuta(ev, pm.pick);
+      if (!luta || !luta.resultado) return;
+      if (NULO.some(x => luta.resultado.toUpperCase().includes(x))) return;
+      const odds = findOdds(ev.oddCard, pm.pick);
+      if (!odds || odds <= 1.0 || odds > 20) return;
+      const cat = getOddsCat(odds);
+      if (!cat) return;
+      stats[cat.key].picks++;
+      const pickL = pm.pick.toLowerCase().split(' ').pop();
+      const acertou = luta.resultado.toLowerCase().includes(pickL);
+      stats[cat.key].roi += acertou ? (odds - 1) : -1;
+      if (acertou) stats[cat.key].acertos++;
     });
   });
   return stats;
@@ -891,7 +891,11 @@ function computeStats() {
   let zebraPicks=0,zebraAcertos=0,zebraROI=0;
   const pmH=[], lockH=[], favH=[], zebH=[];
 
-  _eventos.forEach(ev => {
+  const pastChrono = _eventos
+    .filter(e => !e.isFuturo)
+    .sort((a, b) => parseBrDateMs(a.dataEvento) - parseBrDateMs(b.dataEvento));
+
+  pastChrono.forEach(ev => {
     ev.punterAnalise.forEach(pm => {
       if (!pm.pick) return;
       const luta = findLuta(ev, pm.pick);
@@ -907,20 +911,23 @@ function computeStats() {
     });
     pmH.push({ nome: ev.nome, cum: +pmROI.toFixed(2) });
 
-    ev.lutas.forEach(luta => {
-      if (!luta.resultado || !luta.picks) return;
+    // 🔒 Locks de Elite (probAdj >= 70% + vantagem técnica positiva)
+    (ev.cardLutas || []).forEach(c => {
+      if (!c.fV || !c.fA || !c.oV || !c.oA || typeof analyzeFight !== 'function') return;
+      const luta = findLuta(ev, c.fV) || findLuta(ev, c.fA);
+      if (!luta || !luta.resultado) return;
       if (NULO.some(x => luta.resultado.toUpperCase().includes(x))) return;
-      const allPicks = Object.values(luta.picks).filter(p => p);
-      if (!allPicks.length) return;
-      const topPick = allPicks[0];
-      const isLocker = allPicks.every(p => p.toLowerCase() === topPick.toLowerCase());
-      if (!isLocker) return;
-      const odds = findOdds(ev.oddCard, topPick);
-      if (!odds) return;
+      const dbA = typeof getFighterData === 'function' ? getFighterData(c.fV) : null;
+      const dbB = typeof getFighterData === 'function' ? getFighterData(c.fA) : null;
+      const an = analyzeFight(c.fV, c.fA, c.oV, c.oA, dbA, dbB, _zebraStats, c._eloCtx);
+      if (!an || !an.pickRecommended) return;
+      const isV = an.pickRecommended.toLowerCase() === c.fV.toLowerCase();
+      const prob = isV ? an.probAdjA : an.probAdjB;
+      const odds = isV ? c.oV : c.oA;
+      if (prob < 0.70 || an.multiFactorEdge < 0.01 || !odds || odds <= 1.01) return;
       lockPicks++;
-      const pickL = topPick.toLowerCase().split(' ').pop();
-      const acertou = luta.resultado.toLowerCase().includes(pickL) ||
-                      topPick.toLowerCase().includes(luta.resultado.toLowerCase());
+      const pickL = an.pickRecommended.toLowerCase().split(' ').pop();
+      const acertou = luta.resultado.toLowerCase().includes(pickL);
       lockROI += acertou ? (odds - 1) : -1;
       if (acertou) lockAcertos++;
     });
@@ -1010,7 +1017,10 @@ function computeApostasROI() {
   let dROI=0,dP=0,dA=0;
   let tROI=0,tP=0,tA=0;
   const sH=[],dH=[],tH=[];
-  _eventos.forEach(ev => {
+  const pastChrono = _eventos
+    .filter(e => !e.isFuturo)
+    .sort((a, b) => parseBrDateMs(a.dataEvento) - parseBrDateMs(b.dataEvento));
+  pastChrono.forEach(ev => {
     const ap = ev.apostas;
     if (!ap) { sH.push({nome:ev.nome,cum:+sROI.toFixed(2)}); dH.push({nome:ev.nome,cum:+dROI.toFixed(2)}); tH.push({nome:ev.nome,cum:+tROI.toFixed(2)}); return; }
     if (ap.simples.selecao) {
@@ -1153,8 +1163,8 @@ function renderROIChart(s) {
 
 function renderROICompare(s) {
   const cards = [
-    { label: '🥊 PunterMMA', cls: '', roi: parseFloat(s.pmROI), pct: parseFloat(s.pmROIPct) || 0, picks: s.pmPicks, acertos: s.pmAcertos, desc: 'Picks EV+ calculados antes de cada evento' },
-    { label: '🔒 Consenso Unânime', cls: 'purple', roi: parseFloat(s.lockROI), pct: parseFloat(s.lockROIPct) || 0, picks: s.lockPicks, acertos: s.lockAcertos, desc: 'Lutas onde todos os tipsters concordaram' },
+    { label: '🥊 PunterMMA', cls: '', roi: parseFloat(s.pmROI), pct: parseFloat(s.pmROIPct) || 0, picks: s.pmPicks, acertos: s.pmAcertos, desc: 'Picks oficiais de Alta Precisão (Elo + De-Vig)' },
+    { label: '🔒 Locks de Elite (70%+)', cls: 'purple', roi: parseFloat(s.lockROI), pct: parseFloat(s.lockROIPct) || 0, picks: s.lockPicks, acertos: s.lockAcertos, desc: 'Picks com prob. ≥ 70% e borda técnica positiva' },
     { label: '⭐ Super Favoritos', cls: 'cyan', roi: parseFloat(s.favROI), pct: parseFloat(s.favROIPct) || 0, picks: s.favPicks, acertos: s.favAcertos, desc: 'Favorito de cada luta com odds < 1.35' },
     { label: '🦓 Super Zebras', cls: 'zebra', roi: parseFloat(s.zebraROI), pct: parseFloat(s.zebraROIPct) || 0, picks: s.zebraPicks, acertos: s.zebraAcertos, desc: 'Azarão de cada luta com odds ≥ 2.50' },
   ];
@@ -1182,7 +1192,7 @@ function renderCompareChart(s) {
       labels,
       datasets: [
         { label: '🥊 PunterMMA', data: s.pmH.map(h => h.cum), borderColor: '#e8b84b', backgroundColor: 'rgba(232,184,75,0.06)', borderWidth: 2.5, pointRadius: 3, fill: false, tension: 0.35 },
-        { label: '🔒 Consenso', data: s.lockH.map(h => h.cum), borderColor: '#8b5cf6', backgroundColor: 'rgba(139,92,246,0.06)', borderWidth: 2.5, pointRadius: 3, fill: false, tension: 0.35 },
+        { label: '🔒 Locks de Elite', data: s.lockH.map(h => h.cum), borderColor: '#8b5cf6', backgroundColor: 'rgba(139,92,246,0.06)', borderWidth: 2.5, pointRadius: 3, fill: false, tension: 0.35 },
         { label: '⭐ Super Favoritos', data: s.favH.map(h => h.cum), borderColor: '#00d4ff', borderWidth: 2, pointRadius: 3, fill: false, tension: 0.35, borderDash: [4, 3] },
         { label: '🦓 Super Zebras', data: s.zebH.map(h => h.cum), borderColor: '#fb923c', borderWidth: 2, pointRadius: 3, fill: false, tension: 0.35, borderDash: [4, 3] },
       ]
@@ -1262,16 +1272,20 @@ function renderAllPicks() {
   const STAKE = 100;
   let cumLucro = 0;
   const evRows = [];
-  _eventos.forEach(ev => {
+  const pastChrono = _eventos
+    .filter(e => !e.isFuturo)
+    .sort((a, b) => parseBrDateMs(a.dataEvento) - parseBrDateMs(b.dataEvento));
+
+  pastChrono.forEach(ev => {
     let picks = 0, acertos = 0, evLucro = 0;
-    ev.lutas.forEach(luta => {
-      if (!luta.picks) return;
-      const pmPick = luta.picks['🧠 PunterMind'];
-      if (!pmPick || !luta.resultado) return;
+    (ev.punterAnalise || []).forEach(pm => {
+      if (!pm.pick) return;
+      const luta = findLuta(ev, pm.pick);
+      if (!luta || !luta.resultado) return;
       if (NULO.some(x => luta.resultado.toUpperCase().includes(x))) return;
-      const odds = findOdds(ev.oddCard, pmPick);
+      const odds = findOdds(ev.oddCard, pm.pick);
       if (!odds) return;
-      const pickL = pmPick.toLowerCase().split(' ').pop();
+      const pickL = pm.pick.toLowerCase().split(' ').pop();
       const acertou = luta.resultado.toLowerCase().includes(pickL);
       picks++;
       evLucro += acertou ? STAKE * (odds - 1) : -STAKE;
@@ -1281,6 +1295,7 @@ function renderAllPicks() {
     cumLucro += evLucro;
     evRows.push({ evento: ev.nome, picks, acertos, erros: picks - acertos, investido: picks * STAKE, evLucro: Math.round(evLucro), cum: Math.round(cumLucro) });
   });
+  evRows.reverse();
   if (!evRows.length) {
     document.getElementById('all-picks-container').innerHTML = '<div class="empty"><div class="empty-icon">📋</div>Nenhum pick encontrado.</div>';
     return;
@@ -1553,6 +1568,7 @@ function renderEvento() {
 
   const qCounts = {
     all: cardAnalyses.length,
+    precision: cardAnalyses.filter(x => x.analysis && x.analysis.isHighPrecisionPick).length,
     ev: cardAnalyses.filter(x => x.analysis && (x.analysis.evA > 0.03 || x.analysis.evB > 0.03)).length,
     zebra: cardAnalyses.filter(x => x.analysis && (x.analysis.zebraAlert || (x.c.oV >= 2.5 || x.c.oA >= 2.5))).length,
     ticket: cardAnalyses.filter(x => x.hasTicket).length
@@ -1567,6 +1583,9 @@ function renderEvento() {
     if (_cardFilter.search) {
       const hay = `${c.fV || ''} ${c.fA || ''} ${c.weightClass || ''}`.toLowerCase();
       if (!hay.includes(_cardFilter.search)) return false;
+    }
+    if (_cardFilter.quick === 'precision') {
+      return Boolean(analysis && analysis.isHighPrecisionPick);
     }
     if (_cardFilter.quick === 'ev') {
       return Boolean(analysis && (analysis.evA > 0.03 || analysis.evB > 0.03));
@@ -1606,6 +1625,19 @@ function renderEvento() {
         : evNum > 0
           ? `<span class="badge badge-ev-p">▲ ${evRaw}</span>`
           : `<span class="badge badge-ev-n">▼ ${evRaw}</span>`;
+
+      let statusHtml = '<span style="color:var(--text3);font-size:12px">⏳ Futuro</span>';
+      if (!ev.isFuturo && pm.pick) {
+        const luta = findLuta(ev, pm.pick);
+        if (luta && luta.resultado && !NULO.some(x => luta.resultado.toUpperCase().includes(x))) {
+          const pickL = pm.pick.toLowerCase().split(' ').pop();
+          const hit = luta.resultado.toLowerCase().includes(pickL);
+          statusHtml = hit
+            ? '<span class="badge badge-win">✅ Green</span>'
+            : '<span class="badge badge-ev-n">❌ Red</span>';
+        }
+      }
+
       return `<tr>
         <td style="font-weight:600">${escHtml(pm.luta)}</td>
         <td style="font-size:12px;color:var(--text2);max-width:200px">${escHtml(pm.fisico || '—')}</td>
@@ -1613,13 +1645,14 @@ function renderEvento() {
         <td>${evTag}</td>
         <td style="font-weight:700;color:var(--gold)">${pm.pick ? '🥊 ' + escHtml(pm.pick) : '—'}</td>
         <td style="font-size:12px;color:var(--text2)">${escHtml(pm.met || '—')}</td>
+        <td>${statusHtml}</td>
         <td style="font-size:12px;color:var(--text2);max-width:240px;line-height:1.4">${escHtml(pm.nota || '—')}</td>
       </tr>`;
     }).join('');
     document.getElementById('ev-table-container').innerHTML = `
       <div class="ev-table-wrap">
         <table class="ev-table">
-          <thead><tr><th>Luta</th><th>Vantagem Física</th><th>Prob. Real</th><th>EV</th><th>Pick</th><th>Mét.</th><th>Nota</th></tr></thead>
+          <thead><tr><th>Luta</th><th>Vantagem Física & Elo</th><th>Prob. Real</th><th>EV</th><th>Pick</th><th>Mét.</th><th>Status</th><th>Nota</th></tr></thead>
           <tbody>${rows}</tbody>
         </table>
       </div>`;
@@ -1640,7 +1673,7 @@ function renderEvento() {
     document.getElementById('ev-apostas-container').innerHTML = '';
   }
 
-  if (_currentTab === 'futuros') {
+  if (_currentTab === 'futuros' || _currentTab === 'passados') {
     updateStakesCalculator();
   }
 }

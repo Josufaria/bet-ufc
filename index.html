@@ -7,7 +7,7 @@
   <meta name="description" content="Análise profissional de lutas UFC com probabilidades ajustadas por altura, envergadura, estilo de luta e detector de zebras. Picks EV+ com dados históricos reais.">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🥊</text></svg>">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css?v=7">
+  <link rel="stylesheet" href="css/style.css?v=8">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 </head>
 <body>
@@ -127,6 +127,7 @@
         </div>
         <div class="qf-group">
           <button type="button" class="qf-btn active" data-qf="all">Todas <span class="qf-count">0</span></button>
+          <button type="button" class="qf-btn" data-qf="precision">🎯 Alta Precisão <span class="qf-count">0</span></button>
           <button type="button" class="qf-btn" data-qf="ev">EV+ 🔥 <span class="qf-count">0</span></button>
           <button type="button" class="qf-btn" data-qf="zebra">Zebras 🦓 <span class="qf-count">0</span></button>
           <button type="button" class="qf-btn" data-qf="ticket">Meus Palpites 🎟️ <span class="qf-count">0</span></button>
@@ -195,7 +196,7 @@
         <span class="section-icon">🎯</span>
         <div>
           <div class="section-title">Análise PunterMind do Evento</div>
-          <div class="section-sub">Vantagens físicas e apostas sugeridas compiladas da planilha</div>
+          <div class="section-sub">Vantagens físicas, Rating Elo e apostas de Alta Precisão geradas pelo motor estatístico</div>
         </div>
       </div>
       <div id="ev-table-container"></div>
@@ -213,7 +214,7 @@
         <span class="section-icon">📈</span>
         <div>
           <div class="section-title">Performance Histórica Acumulada</div>
-          <div class="section-sub">Totais acumulados de todos os eventos da planilha</div>
+          <div class="section-sub">Totais acumulados em ordem cronológica de todos os eventos analisados</div>
         </div>
       </div>
       <div class="stats-row" id="perf-stats"></div>
@@ -399,11 +400,11 @@
 <!-- ══════════════════════════════════════════
      SCRIPTS (ordem importa!)
      ══════════════════════════════════════════ -->
-<script src="js/fighters-db.js?v=7"></script>
-<script src="js/events-db.js?v=7"></script>
-<script src="js/analyzer.js?v=7"></script>
-<script src="js/ai-integration.js?v=7"></script>
-<script src="js/app.js?v=7"></script>
+<script src="js/fighters-db.js?v=8"></script>
+<script src="js/events-db.js?v=8"></script>
+<script src="js/analyzer.js?v=8"></script>
+<script src="js/ai-integration.js?v=8"></script>
+<script src="js/app.js?v=8"></script>
 
 </body>
 </html>
