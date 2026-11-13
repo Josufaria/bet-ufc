@@ -110,7 +110,7 @@ module.exports = async function handler(req, res) {
           status: statusState,
           completed,
           method: completed ? methodText : '',
-          cardSegment: comp.cardSegment?.description || (idx === 0 ? 'Main Event' : ''),
+          cardSegment: comp.cardSegment?.description || '',
           odds: compOdds ? {
             details: oddsDetails,
             overUnder: oddsOverUnder,
@@ -122,13 +122,38 @@ module.exports = async function handler(req, res) {
         };
       });
 
+      // A ESPN geralmente envia em ordem cronológica (Preliminar -> Luta Principal).
+      // Garantimos que a Luta Principal fique sempre no índice 0 (topo da tela).
+      const evTitle = normalizeName(ev.name);
+      const isHeadliner = f => {
+        const pair = (f.fighters || []).map(x => normalizeName(x.name).split(' ').pop()).filter(t => t.length > 2);
+        return pair.length >= 2 && evTitle.includes(pair[0]) && evTitle.includes(pair[1]);
+      };
+      let orderedFights = fights;
+      const headIdx = orderedFights.findIndex(isHeadliner);
+      if (headIdx >= orderedFights.length / 2) {
+        orderedFights = [...orderedFights].reverse();
+      } else if (orderedFights.length > 1 && /main event/i.test(orderedFights[orderedFights.length - 1]?.cardSegment || '')) {
+        orderedFights = [...orderedFights].reverse();
+      }
+      const finalHeadIdx = orderedFights.findIndex(isHeadliner);
+      if (finalHeadIdx > 0) {
+        const [main] = orderedFights.splice(finalHeadIdx, 1);
+        orderedFights.unshift(main);
+      }
+      orderedFights.forEach((f, i) => {
+        if (!f.cardSegment) {
+          f.cardSegment = i === 0 ? '🏆 Luta Principal' : i === 1 ? '🔥 Co-Main Event' : i < 5 ? 'Card Principal' : 'Card Preliminar';
+        }
+      });
+
       return {
         id: ev.id,
         name: ev.name,
         shortName: ev.shortName,
         date: ev.date,
         completed: Boolean(ev.status?.type?.completed),
-        fights
+        fights: orderedFights
       };
     });
 

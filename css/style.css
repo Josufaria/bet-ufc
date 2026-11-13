@@ -1709,6 +1709,10 @@ footer a:hover { text-decoration: underline; }
   background: rgba(52,211,153,0.08);
   border-color: rgba(52,211,153,0.3);
 }
+.fc-pick-banner.is-balanced {
+  background: rgba(255,255,255,0.02);
+  border-color: rgba(148,163,184,0.2);
+}
 .fc-pick-lbl { color: var(--text2); font-size: 11px; }
 .fc-pick-name { color: var(--gold); font-weight: 700; }
 .fc-pick-conf { color: var(--cyan); font-size: 11px; font-weight: 600; }

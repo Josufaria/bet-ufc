@@ -157,15 +157,78 @@ function parseBrDateMs(s) {
   return Number.isNaN(ms) ? 0 : ms;
 }
 
+function normalizeTitleStr(s) {
+  return String(s || '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function orderCardMainFirst(cardLutas, eventName) {
+  if (!Array.isArray(cardLutas) || cardLutas.length === 0) return cardLutas || [];
+  if (cardLutas.length > 1) {
+    const title = normalizeTitleStr(eventName);
+    const m = title.match(/(?:ufc\s+\d+|fn|fight night|noche ufc)[a-z0-9\s]*\s([a-z0-9']+)\s+vs\s+([a-z0-9']+)/i)
+      || title.match(/([a-z0-9']+)\s+vs\s+([a-z0-9']+)/i);
+    if (m) {
+      const tokA = m[1].trim();
+      const tokB = m[2].trim().replace(/\d+$/, '');
+      const isHeadliner = c => {
+        const pair = normalizeTitleStr(`${c.fV || ''} ${c.fA || ''}`);
+        return (tokA.length > 2 && pair.includes(tokA)) && (tokB.length > 2 && pair.includes(tokB));
+      };
+      const idx = cardLutas.findIndex(isHeadliner);
+      if (idx >= cardLutas.length / 2) {
+        cardLutas.reverse();
+      }
+      const newIdx = cardLutas.findIndex(isHeadliner);
+      if (newIdx > 0) {
+        const [mainFight] = cardLutas.splice(newIdx, 1);
+        cardLutas.unshift(mainFight);
+      }
+    }
+  }
+  cardLutas.forEach((c, idx) => {
+    c.cardSegment = idx === 0
+      ? '🏆 Luta Principal'
+      : idx === 1
+        ? '🔥 Co-Main Event'
+        : idx < 5
+          ? 'Card Principal'
+          : 'Card Preliminar';
+  });
+  return cardLutas;
+}
+
+function getFighterEloCtx(fV, fA, fightObj) {
+  if (fightObj && fightObj._eloCtx) return fightObj._eloCtx;
+  const kA = String(fV || '').toLowerCase().trim();
+  const kB = String(fA || '').toLowerCase().trim();
+  return {
+    eloA: (window._fighterElo && window._fighterElo[kA]) || 1500,
+    eloB: (window._fighterElo && window._fighterElo[kB]) || 1500,
+    streakA: (window._fighterStreak && window._fighterStreak[kA]) || 0,
+    streakB: (window._fighterStreak && window._fighterStreak[kB]) || 0
+  };
+}
+
 function ensureAllEventsAnalyzed() {
   const activePicks = [];
   const baseZebraStats = computeOddsCatsGeral();
+  const eloMap = {};
+  const streakMap = {};
 
-  _eventos.forEach(ev => {
+  // Ordenar eventos cronologicamente (do mais antigo ao mais recente) para evitar vazamento futuro no Elo
+  const chronoEvents = [..._eventos].sort((a, b) => parseBrDateMs(a.dataEvento) - parseBrDateMs(b.dataEvento));
+
+  chronoEvents.forEach(ev => {
     if (!ev.cardLutas) ev.cardLutas = [];
     if (!ev.lutas) ev.lutas = [];
-    if (!ev.punterAnalise) ev.punterAnalise = [];
     if (!ev.oddCard) ev.oddCard = {};
+
+    orderCardMainFirst(ev.cardLutas, ev.nome);
 
     // Popular oddCard se ainda estiver vazio
     ev.cardLutas.forEach(c => {
@@ -173,20 +236,51 @@ function ensureAllEventsAnalyzed() {
       if (c.fA && c.oA) ev.oddCard[c.fA.toLowerCase()] = c.oA;
     });
 
-    // Gerar análises PunterMind automáticas caso o evento não tenha análise preenchida
-    if (ev.punterAnalise.length === 0 && typeof analyzeFight === 'function') {
-      const evPicks = [];
+    ev.punterAnalise = [];
+    const evPicks = [];
+
+    if (typeof analyzeFight === 'function') {
       ev.cardLutas.forEach(c => {
         if (!c.fV || !c.fA) return;
+        const kA = c.fV.toLowerCase().trim();
+        const kB = c.fA.toLowerCase().trim();
+        const eloCtx = {
+          eloA: eloMap[kA] || 1500,
+          eloB: eloMap[kB] || 1500,
+          streakA: streakMap[kA] || 0,
+          streakB: streakMap[kB] || 0
+        };
+        c._eloCtx = eloCtx;
+
         const dbA = typeof getFighterData === 'function' ? getFighterData(c.fV) : null;
         const dbB = typeof getFighterData === 'function' ? getFighterData(c.fA) : null;
-        const an = analyzeFight(c.fV, c.fA, c.oV, c.oA, dbA, dbB, baseZebraStats);
+        const an = analyzeFight(c.fV, c.fA, c.oV, c.oA, dbA, dbB, baseZebraStats, eloCtx);
         if (!an || !an.pickRecommended) return;
+
+        // Atualizar Elo e Momentum APÓS calcular a previsão desta luta (se a luta já tiver resultado)
+        const lutaRes = findLuta(ev, c.fV) || findLuta(ev, c.fA);
+        if (lutaRes && lutaRes.resultado && !NULO.some(x => lutaRes.resultado.toUpperCase().includes(x))) {
+          const resLow = lutaRes.resultado.toLowerCase();
+          const lastV = kA.split(' ').pop();
+          const lastA = kB.split(' ').pop();
+          const f1Won = (lastV && resLow.includes(lastV)) || resLow === kA;
+          const f2Won = !f1Won && ((lastA && resLow.includes(lastA)) || resLow === kB);
+          if (f1Won || f2Won) {
+            const expA = 1 / (1 + Math.pow(10, (eloCtx.eloB - eloCtx.eloA) / 400));
+            eloMap[kA] = eloCtx.eloA + 32 * ((f1Won ? 1 : 0) - expA);
+            eloMap[kB] = eloCtx.eloB + 32 * ((f2Won ? 1 : 0) - (1 - expA));
+            streakMap[kA] = f1Won ? (eloCtx.streakA > 0 ? eloCtx.streakA + 1 : 1) : (eloCtx.streakA < 0 ? eloCtx.streakA - 1 : -1);
+            streakMap[kB] = f2Won ? (eloCtx.streakB > 0 ? eloCtx.streakB + 1 : 1) : (eloCtx.streakB < 0 ? eloCtx.streakB - 1 : -1);
+          }
+        }
 
         const phys = an.physical || {};
         const advParts = [];
         if (phys.reachDiff) advParts.push(`Env ${phys.reachDiff > 0 ? '+' : ''}${phys.reachDiff}cm`);
         if (phys.heightDiff) advParts.push(`Alt ${phys.heightDiff > 0 ? '+' : ''}${phys.heightDiff}cm`);
+        if (Math.abs(eloCtx.eloA - eloCtx.eloB) >= 15) {
+          advParts.push(`Elo ${Math.round(eloCtx.eloA)}×${Math.round(eloCtx.eloB)}`);
+        }
         const isPickV = an.pickRecommended.toLowerCase() === c.fV.toLowerCase();
         const pickProb = isPickV ? an.probAdjA : an.probAdjB;
         const impProb = isPickV ? an.probImplA : an.probImplB;
@@ -199,19 +293,39 @@ function ensureAllEventsAnalyzed() {
           ev: an.pickIsEstimate ? 'CONSENSO' : `${an.pickEV >= 0 ? '+' : ''}${an.pickEV.toFixed(3)}`,
           pick: an.pickRecommended,
           met: an.predictedMethod || 'Decisão',
-          nota: an.zebraAlert
-            ? `🦓 Zebra com valor histórico (${Math.round((an.zebraHitRate || 0) * 100)}%)`
-            : an.pickHasValue
-              ? `EV+ ${(an.pickEV * 100).toFixed(1)}% · Confiança ${an.pickConf}%`
-              : `Base Estatística · Confiança ${an.pickConf}%`
+          nota: an.isHighPrecisionPick
+            ? `🎯 Alta Precisão (${an.pickConf}% prob · borda ${(an.multiFactorEdge * 100).toFixed(1)}%)`
+            : `Base Estatística (${an.pickConf}%)`
         };
-        ev.punterAnalise.push(pmRow);
-        evPicks.push({ ...pmRow, odd: isPickV ? c.oV : c.oA, evNum: an.pickEV || 0, conf: an.pickConf || 50 });
+
+        // Na tabela oficial de Picks / ROI histórico entram apenas os Picks Oficiais de Alta Precisão (evita lutas 50/50!)
+        if (an.isHighPrecisionPick || ev.isFuturo) {
+          if (an.isHighPrecisionPick) {
+            ev.punterAnalise.push(pmRow);
+          }
+        }
+        evPicks.push({
+          ...pmRow,
+          odd: isPickV ? c.oV : c.oA,
+          evNum: an.pickEV || 0,
+          conf: an.pickConf || 50,
+          highPrecision: an.isHighPrecisionPick
+        });
       });
 
-      // Gerar sugestões de Simples / Dupla / Tripla quando não houver
-      if (!ev.apostas && evPicks.length > 0) {
-        const sortedPicks = [...evPicks].sort((a, b) => (b.evNum - a.evNum) || (b.conf - a.conf));
+      // Fallback para eventos passados/futuros sem nenhum pick acima do corte
+      if (ev.punterAnalise.length === 0 && evPicks.length > 0) {
+        const best = [...evPicks].sort((a, b) => (b.conf - a.conf) || (b.evNum - a.evNum))[0];
+        if (best) ev.punterAnalise.push(best);
+      }
+
+      // Gerar sugestões de Simples / Dupla / Tripla priorizando picks de Alta Precisão
+      if (evPicks.length > 0) {
+        const sortedPicks = [...evPicks].sort((a, b) =>
+          (Number(b.highPrecision) - Number(a.highPrecision)) ||
+          (b.conf - a.conf) ||
+          (b.evNum - a.evNum)
+        );
         const top1 = sortedPicks[0];
         const top2 = sortedPicks.slice(0, 2);
         const top3 = sortedPicks.slice(0, 3);
@@ -222,7 +336,7 @@ function ensureAllEventsAnalyzed() {
         };
         ev.apostas = {
           simples: top1 ? {
-            tipo: '🎯 Simples Principal',
+            tipo: '🎯 Simples Principal (Alta Precisão)',
             selecao: top1.pick,
             odd: top1.odd ? Number(top1.odd).toFixed(2) : 'Est.',
             nota: top1.nota
@@ -231,13 +345,13 @@ function ensureAllEventsAnalyzed() {
             tipo: '⚡ Dupla Sugerida',
             selecao: top2.map(x => x.pick.split(' ').pop()).join(' + '),
             odd: multOdd(top2),
-            nota: `Combinação dos 2 melhores picks do card`
+            nota: `2 seleções de maior convergência`
           } : {},
           tripla: top3.length >= 3 ? {
-            tipo: '🚀 Tripla de Valor',
+            tipo: '🚀 Tripla Conservadora',
             selecao: top3.map(x => x.pick.split(' ').pop()).join(' + '),
             odd: multOdd(top3),
-            nota: `3 seleções de maior confiança`
+            nota: `3 seleções de maior probabilidade`
           } : {}
         };
       }
@@ -253,6 +367,8 @@ function ensureAllEventsAnalyzed() {
     }
   });
 
+  window._fighterElo = eloMap;
+  window._fighterStreak = streakMap;
   window._activePicks = activePicks;
   _zebraStats = baseZebraStats;
 }
@@ -455,7 +571,9 @@ function integrateEspnEvents(espnEvents) {
 
     if (cardLutas.length === 0) return;
 
-    // A ESPN retorna Main Event primeiro; invertemos caso queiramos Main Event por último no cardLutas ou mantemos destaque
+    // A ESPN envia em ordem cronológica (preliminares -> luta principal); garante Luta Principal no topo
+    orderCardMainFirst(cardLutas, espnEv.name);
+
     const evDateObj = espnEv.date ? new Date(espnEv.date) : null;
     const isFuturoEspn = Boolean(!espnEv.completed && evDateObj && evDateObj >= new Date(hoje.getTime() - 12 * 3600000));
     const dataStr = evDateObj && !isNaN(evDateObj.getTime())
@@ -463,9 +581,10 @@ function integrateEspnEvents(espnEvents) {
       : '';
 
     const baseName = espnEv.name.split(':')[0].trim().toLowerCase();
+    const isNumberedPpv = /^ufc\s+\d+$/i.test(baseName);
     const existingIdx = _eventos.findIndex(e => {
       const en = (e.nome || '').toLowerCase();
-      return en === espnEv.name.toLowerCase() || (baseName.length > 5 && en.includes(baseName));
+      return en === espnEv.name.toLowerCase() || (isNumberedPpv && en.startsWith(baseName));
     });
 
     if (existingIdx >= 0) {
@@ -1426,7 +1545,8 @@ function renderEvento() {
   const cardAnalyses = (ev.cardLutas || []).map((c, idx) => {
     const dbA = typeof getFighterData === 'function' ? getFighterData(c.fV) : null;
     const dbB = typeof getFighterData === 'function' ? getFighterData(c.fA) : null;
-    const analysis = typeof analyzeFight === 'function' ? analyzeFight(c.fV, c.fA, c.oV, c.oA, dbA, dbB, _zebraStats) : null;
+    const eloCtx = getFighterEloCtx(c.fV, c.fA, c);
+    const analysis = typeof analyzeFight === 'function' ? analyzeFight(c.fV, c.fA, c.oV, c.oA, dbA, dbB, _zebraStats, eloCtx) : null;
     const key = getTicketKey(ev.nome, c.fV, c.fA);
     return { c, idx, dbA, dbB, analysis, hasTicket: Boolean(_myTickets[key]) };
   });
@@ -1599,8 +1719,9 @@ function buildFightCard(c, ev, idx, preAnalysis = null, preDbA = null, preDbB = 
   const eAdvV = rNumV > 0 && rNumA > 0 && rNumV > rNumA;
   const eAdvA = rNumV > 0 && rNumA > 0 && rNumA > rNumV;
 
-  // Análise multi-fator (sempre executada, com ou sem odds de casa)
-  const analysis = preAnalysis || (typeof analyzeFight === 'function' ? analyzeFight(fV, fA, oV, oA, dbA, dbB, _zebraStats) : null);
+  // Análise multi-fator com Rating Elo UFC & Momentum
+  const eloCtx = getFighterEloCtx(fV, fA, c);
+  const analysis = preAnalysis || (typeof analyzeFight === 'function' ? analyzeFight(fV, fA, oV, oA, dbA, dbB, _zebraStats, eloCtx) : null);
 
   // Odds formatting (reais ou estimadas)
   const renderOdds = (oddNum, estOdd, espnOddStr) => {
@@ -1643,12 +1764,12 @@ function buildFightCard(c, ev, idx, preAnalysis = null, preDbA = null, preDbB = 
     badges += `<span class="badge badge-win">✅ Venceu: ${escHtml(resultado)}${luta?.metodo ? ' (' + escHtml(luta.metodo) + ')' : ''}</span>`;
   }
 
-  // Banner do Pick recomendado do modelo
+  // Banner do Pick recomendado do modelo (Alta Precisão vs Luta Equilibrada)
   const pickBanner = analysis?.pickRecommended ? `
-    <div class="fc-pick-banner ${analysis.pickHasValue ? 'has-ev' : ''}">
-      <span class="fc-pick-lbl">🤖 Modelo PunterMMA:</span>
+    <div class="fc-pick-banner ${analysis.isHighPrecisionPick ? 'has-ev' : 'is-balanced'}">
+      <span class="fc-pick-lbl">${analysis.isHighPrecisionPick ? '🎯 Pick Alta Precisão:' : '⚖️ Tendência Leve (50/50):'}</span>
       <strong class="fc-pick-name">${escHtml(analysis.pickRecommended)}</strong>
-      <span class="fc-pick-conf">${analysis.pickConf}% conf.${analysis.pickIsEstimate ? ' (Est.)' : ''}</span>
+      <span class="fc-pick-conf">${analysis.pickConf}% prob.${analysis.pickIsEstimate ? ' (Est.)' : ''} · Elo ${analysis.eloA}×${analysis.eloB}</span>
     </div>
   ` : '';
 
@@ -2153,7 +2274,8 @@ function updateStakesCalculator() {
 
     const dbA = getFighterData(fV);
     const dbB = getFighterData(fA);
-    const analysis = analyzeFight(fV, fA, oV, oA, dbA, dbB, _zebraStats);
+    const eloCtx = getFighterEloCtx(fV, fA, c);
+    const analysis = analyzeFight(fV, fA, oV, oA, dbA, dbB, _zebraStats, eloCtx);
 
     if (analysis && analysis.pickRecommended) {
       const pickName = analysis.pickRecommended;

@@ -679,11 +679,13 @@ function run() {
     const key = stripAccents(ev.nome).toLowerCase().trim();
     const shortKey = key.split(':')[0].trim();
 
-    // Check exact match or short key match (e.g. "UFC 327" vs "UFC 327: Procházka vs. Ulberg")
+    // Match exact name OR numbered UFC PPV prefix (e.g. "ufc 327" vs "ufc 327: ...")
+    // NEVER collapse different "ufc fight night: ..." cards under "ufc fight night"!
+    const isNumberedPpv = /^ufc\s+\d+$/i.test(shortKey);
     let matchedKey = null;
     for (const [k] of eventsMap) {
       const kShort = k.split(':')[0].trim();
-      if (k === key || (shortKey.startsWith('ufc ') && kShort === shortKey)) {
+      if (k === key || (isNumberedPpv && kShort === shortKey)) {
         matchedKey = k;
         break;
       }
@@ -872,6 +874,31 @@ function run() {
       });
     }
   }
+
+  // Garantir que a Luta Principal esteja sempre no índice 0 de cardLutas
+  function ensureHeadlinerFirst(ev) {
+    if (!Array.isArray(ev.cardLutas) || ev.cardLutas.length < 2) return;
+    const title = stripAccents(ev.nome || '').toLowerCase();
+    const m = title.match(/(?::|fn)\s*([a-z0-9'\-\s]+?)\s+vs\.?\s+([a-z0-9'\-\s]+)/i);
+    if (!m) return;
+    const tokA = m[1].trim().split(/\s+/).pop();
+    const tokB = m[2].trim().split(/\s+/).pop().replace(/\d+$/, '');
+    const matchFight = c => {
+      const n = stripAccents(`${c.fV || ''} ${c.fA || ''}`).toLowerCase();
+      return (tokA.length > 2 && n.includes(tokA)) && (tokB.length > 2 && n.includes(tokB));
+    };
+    const idx = ev.cardLutas.findIndex(matchFight);
+    if (idx === -1) return;
+    if (idx >= ev.cardLutas.length / 2) {
+      ev.cardLutas.reverse();
+    }
+    const newIdx = ev.cardLutas.findIndex(matchFight);
+    if (newIdx > 0) {
+      const [mainFight] = ev.cardLutas.splice(newIdx, 1);
+      ev.cardLutas.unshift(mainFight);
+    }
+  }
+  eventsList.forEach(ensureHeadlinerFirst);
 
   // 6. Gravar js/events-db.js
   const eventsContent = `/**
