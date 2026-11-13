@@ -37,66 +37,75 @@ let _lutadores = {};
 let _tipsters  = [];
 let _zebraStats = {};
 let _currentTab = 'futuros';
+let _cardFilter = { search: '', quick: 'all' };
+let _myTickets = {};
+try {
+  _myTickets = JSON.parse(localStorage.getItem('ufc_my_tickets_v1') || '{}') || {};
+} catch (e) { _myTickets = {}; }
 
-// Fila Inteligente ESPN (Garante que a fila não será reescrita a cada renderização)
+window._espnApiAvailable = true;
+
+// Fila Inteligente ESPN (Sem travar a UI com skeletons infinitos)
 window._espnQueue = [];
 window._espnProcessing = false;
 window._fetchingEspn = {};
 window._processEspnQueue = async function() {
-  if (window._espnProcessing || window._espnQueue.length === 0) return;
+  if (!window._espnApiAvailable || window._espnProcessing || window._espnQueue.length === 0) {
+    window._espnQueue = [];
+    return;
+  }
   window._espnProcessing = true;
 
-  const batch = [...new Set(window._espnQueue.splice(0, window._espnQueue.length))];
-  
+  const batch = [...new Set(window._espnQueue.splice(0, 6))];
   try {
-    console.log(`[ESPN Queue] Buscando lote em paralelo: ${batch.join(', ')}`);
-    
     await Promise.allSettled(batch.map(async (fighter) => {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 3000);
       try {
-        const r = await fetch(`/api/get-fighter-espn?name=${encodeURIComponent(fighter)}`);
+        const r = await fetch(`/api/get-fighter-espn?name=${encodeURIComponent(fighter)}`, { signal: controller.signal });
+        const ct = r.headers.get('content-type') || '';
+        if (!ct.includes('application/json')) {
+          window._espnApiAvailable = false;
+          window._fetchingEspn[fighter] = 'not_found';
+          return;
+        }
         if (r.ok) {
-           const data = await r.json();
-           if (data.success) {
-              if (typeof saveCustomFighter === 'function') {
-                const existingDb = typeof getFighterData === 'function' ? getFighterData(fighter) : {};
-                saveCustomFighter(fighter, {
-                  ...existingDb,
-                  height_cm: data.height_cm || existingDb.height_cm,
-                  reach_cm: data.reach_cm || existingDb.reach_cm,
-                  stance: data.stance || existingDb.stance,
-                  wins: data.wins !== null ? data.wins : existingDb.wins,
-                  losses: data.losses !== null ? data.losses : existingDb.losses,
-                  draws: data.draws !== null ? data.draws : existingDb.draws,
-                  espn_photo: data.photo,
-                  not_found_espn: false,
-                  espn_sync_done: true
-                });
-                window._fetchingEspn[fighter] = false;
-                if (typeof refreshFighterCards === 'function') {
-                   refreshFighterCards(fighter);
-                }
-              }
-           } else {
-             window._fetchingEspn[fighter] = false;
-           }
-        } else if (r.status === 404) {
-           window._fetchingEspn[fighter] = 'not_found';
-           if (typeof saveCustomFighter === 'function') {
-             const existingDb = typeof getFighterData === 'function' ? getFighterData(fighter) : {};
-             saveCustomFighter(fighter, { ...existingDb, not_found_espn: true });
-           }
+          const data = await r.json();
+          if (data.success && typeof saveCustomFighter === 'function') {
+            const existingDb = (typeof getFighterData === 'function' ? getFighterData(fighter) : null) || {};
+            saveCustomFighter(fighter, {
+              ...existingDb,
+              height_cm: data.height_cm || existingDb.height_cm,
+              reach_cm: data.reach_cm || existingDb.reach_cm,
+              stance: data.stance || existingDb.stance,
+              wins: data.wins != null ? data.wins : existingDb.wins,
+              losses: data.losses != null ? data.losses : existingDb.losses,
+              draws: data.draws != null ? data.draws : existingDb.draws,
+              espn_photo: data.photo || existingDb.espn_photo,
+              espn_sync_done: true
+            });
+            window._fetchingEspn[fighter] = false;
+            if (typeof refreshFighterCards === 'function') refreshFighterCards(fighter);
+            return;
+          }
+        }
+        window._fetchingEspn[fighter] = 'not_found';
+        if (typeof saveCustomFighter === 'function') {
+          const existingDb = (typeof getFighterData === 'function' ? getFighterData(fighter) : null) || {};
+          saveCustomFighter(fighter, { ...existingDb, espn_sync_done: true });
         }
       } catch (e) {
-        console.error("[ESPN Queue] Erro individual para", fighter, e);
-        window._fetchingEspn[fighter] = false;
+        window._fetchingEspn[fighter] = 'not_found';
+      } finally {
+        clearTimeout(timer);
       }
     }));
-  } catch (e) {
-    console.error("[ESPN Queue] Erro ao processar lote", e);
   } finally {
     window._espnProcessing = false;
-    if (window._espnQueue.length > 0) {
+    if (window._espnApiAvailable && window._espnQueue.length > 0) {
       window._processEspnQueue();
+    } else {
+      window._espnQueue = [];
     }
   }
 };
@@ -126,138 +135,391 @@ async function batchGetChunked(sheets, size = 8) {
   return all;
 }
 
-// ── CARREGAMENTO ─────────────────────────────────────────────────
-async function loadData() {
-  const loadEl = document.getElementById('loading');
-  try {
-    loadEl.innerHTML = '<div class="spinner"></div>Buscando abas da planilha…';
+// ── CARREGAMENTO INSTANTÂNEO + SINCRONIZAÇÃO EM BACKGROUND ───────
+function hydrateFightersStylesFromDb() {
+  if (typeof FIGHTERS_DB !== 'object' || !FIGHTERS_DB) return;
+  Object.entries(FIGHTERS_DB).forEach(([k, info]) => {
+    if (!info || !info.style) return;
+    if (!_lutadores[k]) _lutadores[k] = info.style;
+    const last = k.split(' ').pop();
+    if (last && last.length > 3 && !_lutadores[last]) _lutadores[last] = info.style;
+  });
+}
 
-    const meta = await api('?fields=sheets(properties.title)');
-    const all = (meta.sheets || []).map(s => s.properties.title);
-    const sheets = all.filter(n => !IGNORAR.includes(n));
+function parseBrDateMs(s) {
+  if (!s) return 0;
+  const str = String(s).trim();
+  if (str.includes('/')) {
+    const p = str.split('/');
+    if (p.length === 3) return new Date(`${p[2]}-${p[1]}-${p[0]}T12:00:00`).getTime() || 0;
+  }
+  const ms = Date.parse(str);
+  return Number.isNaN(ms) ? 0 : ms;
+}
 
-    loadEl.innerHTML = `<div class="spinner"></div>Carregando ${sheets.length} eventos…`;
+function ensureAllEventsAnalyzed() {
+  const activePicks = [];
+  const baseZebraStats = computeOddsCatsGeral();
 
-    // Tipsters
-    try {
-      const cfg = await api('/values/' + encodeURIComponent('📊 Ref. Odds!H2:H3'));
-      const vals = (cfg.values || []);
-      _tipsters = JSON.parse(vals[1]?.[0] || '[]');
-    } catch (e) { console.warn('Tipsters:', e); }
+  _eventos.forEach(ev => {
+    if (!ev.cardLutas) ev.cardLutas = [];
+    if (!ev.lutas) ev.lutas = [];
+    if (!ev.punterAnalise) ev.punterAnalise = [];
+    if (!ev.oddCard) ev.oddCard = {};
 
-    // Lutadores (estilo)
-    const lutTab = all.find(n => n.includes('Lutadores'));
-    if (lutTab) {
-      try {
-        const lr = await api(`/values/${encodeURIComponent(lutTab)}!A1:H500`);
-        parseLutadores(lr.values || []);
-      } catch (e) { console.warn('Lutadores:', e); }
-    }
+    // Popular oddCard se ainda estiver vazio
+    ev.cardLutas.forEach(c => {
+      if (c.fV && c.oV) ev.oddCard[c.fV.toLowerCase()] = c.oV;
+      if (c.fA && c.oA) ev.oddCard[c.fA.toLowerCase()] = c.oA;
+    });
 
-    if (!sheets.length) { renderEmpty(); return; }
+    // Gerar análises PunterMind automáticas caso o evento não tenha análise preenchida
+    if (ev.punterAnalise.length === 0 && typeof analyzeFight === 'function') {
+      const evPicks = [];
+      ev.cardLutas.forEach(c => {
+        if (!c.fV || !c.fA) return;
+        const dbA = typeof getFighterData === 'function' ? getFighterData(c.fV) : null;
+        const dbB = typeof getFighterData === 'function' ? getFighterData(c.fA) : null;
+        const an = analyzeFight(c.fV, c.fA, c.oV, c.oA, dbA, dbB, baseZebraStats);
+        if (!an || !an.pickRecommended) return;
 
-    const evData = await batchGetChunked(sheets);
-    evData.forEach(({ nome, values }) => parseEvento(nome, values));
+        const phys = an.physical || {};
+        const advParts = [];
+        if (phys.reachDiff) advParts.push(`Env ${phys.reachDiff > 0 ? '+' : ''}${phys.reachDiff}cm`);
+        if (phys.heightDiff) advParts.push(`Alt ${phys.heightDiff > 0 ? '+' : ''}${phys.heightDiff}cm`);
+        const isPickV = an.pickRecommended.toLowerCase() === c.fV.toLowerCase();
+        const pickProb = isPickV ? an.probAdjA : an.probAdjB;
+        const impProb = isPickV ? an.probImplA : an.probImplB;
 
-    // ── INTEGRAÇÃO ESPN (Eventos Futuros) ──
-    try {
-      loadEl.innerHTML = `<div class="spinner"></div>Sincronizando API ESPN em tempo real…`;
-      const espnRes = await Promise.race([
-        fetch('/api/get-espn-events'),
-        new Promise((_, rej) => setTimeout(() => rej(new Error('ESPN timeout')), 5000))
-      ]);
-      if (espnRes.ok) {
-        const espnJson = await espnRes.json();
-        if (espnJson.success && espnJson.events) {
-          integrateEspnEvents(espnJson.events);
-        }
+        const pmRow = {
+          luta: `${c.fV} vs ${c.fA}`,
+          fisico: advParts.length ? advParts.join(' · ') : 'Equilibrado',
+          probImp: impProb ? `${(impProb * 100).toFixed(0)}%` : '50%',
+          probReal: `${(pickProb * 100).toFixed(1)}%`,
+          ev: an.pickIsEstimate ? 'CONSENSO' : `${an.pickEV >= 0 ? '+' : ''}${an.pickEV.toFixed(3)}`,
+          pick: an.pickRecommended,
+          met: an.predictedMethod || 'Decisão',
+          nota: an.zebraAlert
+            ? `🦓 Zebra com valor histórico (${Math.round((an.zebraHitRate || 0) * 100)}%)`
+            : an.pickHasValue
+              ? `EV+ ${(an.pickEV * 100).toFixed(1)}% · Confiança ${an.pickConf}%`
+              : `Base Estatística · Confiança ${an.pickConf}%`
+        };
+        ev.punterAnalise.push(pmRow);
+        evPicks.push({ ...pmRow, odd: isPickV ? c.oV : c.oA, evNum: an.pickEV || 0, conf: an.pickConf || 50 });
+      });
+
+      // Gerar sugestões de Simples / Dupla / Tripla quando não houver
+      if (!ev.apostas && evPicks.length > 0) {
+        const sortedPicks = [...evPicks].sort((a, b) => (b.evNum - a.evNum) || (b.conf - a.conf));
+        const top1 = sortedPicks[0];
+        const top2 = sortedPicks.slice(0, 2);
+        const top3 = sortedPicks.slice(0, 3);
+        const multOdd = arr => {
+          const valid = arr.map(x => Number(x.odd)).filter(o => o > 1);
+          if (valid.length !== arr.length) return '—';
+          return valid.reduce((acc, o) => acc * o, 1).toFixed(2);
+        };
+        ev.apostas = {
+          simples: top1 ? {
+            tipo: '🎯 Simples Principal',
+            selecao: top1.pick,
+            odd: top1.odd ? Number(top1.odd).toFixed(2) : 'Est.',
+            nota: top1.nota
+          } : {},
+          dupla: top2.length >= 2 ? {
+            tipo: '⚡ Dupla Sugerida',
+            selecao: top2.map(x => x.pick.split(' ').pop()).join(' + '),
+            odd: multOdd(top2),
+            nota: `Combinação dos 2 melhores picks do card`
+          } : {},
+          tripla: top3.length >= 3 ? {
+            tipo: '🚀 Tripla de Valor',
+            selecao: top3.map(x => x.pick.split(' ').pop()).join(' + '),
+            odd: multOdd(top3),
+            nota: `3 seleções de maior confiança`
+          } : {}
+        };
       }
-    } catch (err) {
-      console.warn("Falha ao carregar API da ESPN:", err);
     }
 
-    // Pré-calcular stats de zebra
-    _zebraStats = computeOddsCatsGeral();
+    // Coletar picks ativos de eventos futuros para o Assistente de IA
+    if (ev.isFuturo) {
+      ev.punterAnalise.forEach(pm => {
+        if (pm.pick) {
+          activePicks.push({ event: ev.nome, fight: pm.luta, pick: pm.pick, ev: pm.ev, met: pm.met });
+        }
+      });
+    }
+  });
 
+  window._activePicks = activePicks;
+  _zebraStats = baseZebraStats;
+}
+
+function setSyncStatus(text, state = 'ok') {
+  const el = document.getElementById('sync-status-pill');
+  if (!el) return;
+  el.textContent = text;
+  el.className = `sync-pill sync-${state}`;
+}
+
+async function fetchPublicEspnScoreboardDirect() {
+  const now = new Date();
+  const fmt = d => `${d.getUTCFullYear()}${String(d.getUTCMonth()+1).padStart(2,'0')}${String(d.getUTCDate()).padStart(2,'0')}`;
+  const start = new Date(now.getTime() - 21 * 86400000);
+  const end = new Date(now.getTime() + 90 * 86400000);
+  const url = `https://site.api.espn.com/apis/site/v2/sports/mma/ufc/scoreboard?dates=${fmt(start)}-${fmt(end)}`;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 3500);
+  try {
+    const res = await fetch(url, { signal: controller.signal });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const am2dec = ml => {
+      const n = Number(ml);
+      if (!Number.isFinite(n) || n === 0) return null;
+      return n > 0 ? +(1 + n / 100).toFixed(2) : +(1 + 100 / Math.abs(n)).toFixed(2);
+    };
+    return (data.events || []).map(ev => ({
+      id: ev.id,
+      name: ev.name,
+      shortName: ev.shortName,
+      date: ev.date,
+      completed: Boolean(ev.status?.type?.completed),
+      fights: (ev.competitions || []).map((comp, idx) => {
+        const compOdds = comp.odds?.[0] || null;
+        const homeMl = compOdds?.homeTeamOdds?.moneyLine;
+        const awayMl = compOdds?.awayTeamOdds?.moneyLine;
+        const fighters = (comp.competitors || []).map((f, fIdx) => {
+          const ath = f.athlete || {};
+          const fullName = ath.displayName || ath.fullName || 'Unknown';
+          const local = typeof getFighterData === 'function' ? (getFighterData(fullName) || {}) : {};
+          const odd = fIdx === 0 ? am2dec(homeMl) : am2dec(awayMl);
+          return {
+            id: f.id,
+            name: fullName,
+            shortName: ath.shortName || fullName,
+            photo: ath.headshot?.href || (f.id ? `https://a.espncdn.com/combiner/i?img=/i/headshots/mma/players/full/${f.id}.png` : ''),
+            record: f.records?.[0]?.summary || '0-0-0',
+            winner: Boolean(f.winner),
+            odd,
+            height_cm: local.height_cm || 0,
+            reach_cm: local.reach_cm || 0,
+            stance: local.stance || '',
+            style: local.style || 'MMA'
+          };
+        });
+        const state = comp.status?.type?.state || 'pre';
+        return {
+          id: comp.id || `${ev.id}-${idx}`,
+          date: comp.date || ev.date,
+          status: state,
+          completed: Boolean(comp.status?.type?.completed) || state === 'post',
+          method: comp.details?.[0]?.type?.text || comp.status?.type?.shortDetail || '',
+          cardSegment: comp.cardSegment?.description || (idx === 0 ? 'Main Event' : ''),
+          weightClass: comp.type?.abbreviation || comp.type?.text || '',
+          odds: compOdds ? { details: compOdds.details || 'Sem odds', oddA: fighters[0]?.odd, oddB: fighters[1]?.odd } : null,
+          fighters
+        };
+      })
+    }));
+  } catch (e) {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function syncEspnInBackground() {
+  setSyncStatus('🔄 Sincronizando ESPN…', 'loading');
+  let espnEvents = null;
+
+  // 1) Tenta endpoint serverless (/api/get-espn-events)
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), 3000);
+  try {
+    const r = await fetch('/api/get-espn-events', { signal: ctrl.signal });
+    const ct = r.headers.get('content-type') || '';
+    if (r.ok && ct.includes('application/json')) {
+      const json = await r.json();
+      if (json.success && Array.isArray(json.events)) {
+        espnEvents = json.events;
+      }
+    }
+  } catch (e) {
+    // fallback direto abaixo
+  } finally {
+    clearTimeout(t);
+  }
+
+  // 2) Fallback direto via API pública ESPN (sem depender de backend/Sheets)
+  if (!espnEvents) {
+    espnEvents = await fetchPublicEspnScoreboardDirect();
+  }
+
+  if (espnEvents && espnEvents.length > 0) {
+    integrateEspnEvents(espnEvents);
+    ensureAllEventsAnalyzed();
+    const stats = computeStats();
+    renderKPIs(stats);
+    renderPerfStats(stats);
+    renderROICompare(stats);
+    renderApostasROI();
+    renderAllPicks();
+    renderOddsCats();
+    renderOddsCatsGeral();
+    populateEventSelector(_currentTab);
+    setSyncStatus(`🟢 ESPN ao vivo (${espnEvents.length} cards)`, 'ok');
+  } else {
+    setSyncStatus(`⚡ Base Local (${_eventos.length} eventos)`, 'local');
+  }
+}
+
+async function loadData() {
+  try {
+    hydrateFightersStylesFromDb();
+
+    if (Array.isArray(window.INITIAL_EVENTS_DB) && window.INITIAL_EVENTS_DB.length > 0) {
+      // Clonagem leve para evitar mutação do array global original
+      _eventos = window.INITIAL_EVENTS_DB.map(ev => ({
+        ...ev,
+        cardLutas: (ev.cardLutas || []).map(c => ({ ...c })),
+        lutas: (ev.lutas || []).map(l => ({ ...l })),
+        punterAnalise: (ev.punterAnalise || []).map(p => ({ ...p })),
+        oddCard: { ...(ev.oddCard || {}) }
+      }));
+
+      // Ordenar com segurança: mais recentes primeiro para consistência interna
+      _eventos.sort((a, b) => parseBrDateMs(b.dataEvento) - parseBrDateMs(a.dataEvento));
+    } else {
+      loadDemoData();
+    }
+
+    ensureAllEventsAnalyzed();
     renderAll();
+    setSyncStatus(`⚡ Base Local (${_eventos.length} eventos)`, 'local');
+
+    // Sincronizar ESPN ao vivo em segundo plano sem bloquear a interface
+    syncEspnInBackground();
   } catch (e) {
     console.error('loadData:', e);
-    // Fallback elegante para dados locais offline (UFC 299, 300 e 301)
     loadDemoData();
-    showDemoWarning(e.message);
+    ensureAllEventsAnalyzed();
     renderAll();
+    setSyncStatus('⚡ Modo Offline', 'local');
   }
 }
 
 // ── INTEGRAÇÃO ESPN ───────────────────────────────────────────────
 function integrateEspnEvents(espnEvents) {
+  const hoje = new Date();
+  hoje.setHours(0, 0, 0, 0);
+
   espnEvents.forEach(espnEv => {
     const cardLutas = [];
     const oddCard = {};
-    
-    espnEv.fights.forEach(fight => {
+    const lutas = [];
+
+    (espnEv.fights || []).forEach((fight, idx) => {
       if (!fight.fighters || fight.fighters.length < 2) return;
       const f1 = fight.fighters[0];
       const f2 = fight.fighters[1];
-      
+      const oV = f1.odd || fight.odds?.oddA || null;
+      const oA = f2.odd || fight.odds?.oddB || null;
+      if (oV) oddCard[f1.name.toLowerCase()] = oV;
+      if (oA) oddCard[f2.name.toLowerCase()] = oA;
+
       cardLutas.push({
         fV: f1.name,
-        oV: null,
-        f1Obj: f1, // Guardando o objeto inteiro para injetar fotos e cartel depois
+        oV,
+        f1Obj: f1,
         espnPhotoV: f1.photo,
         fA: f2.name,
-        oA: null,
+        oA,
         f2Obj: f2,
         espnPhotoA: f2.photo,
+        weightClass: fight.weightClass || '',
+        cardSegment: fight.cardSegment || (idx === 0 ? 'Main Event' : ''),
         espnOdds: fight.odds ? fight.odds.details : null
+      });
+
+      const winFighter = fight.completed ? (f1.winner ? f1.name : f2.winner ? f2.name : '') : '';
+      lutas.push({
+        luta: `${f1.name} vs ${f2.name}`,
+        picks: {},
+        resultado: winFighter,
+        metodo: fight.method || ''
       });
     });
 
-    // Inverter a ordem para que a luta principal (primeira da ESPN) fique por último no card
-    cardLutas.reverse();
+    if (cardLutas.length === 0) return;
 
-    const evObj = {
-      nome: espnEv.name, // Nome oficial do evento
-      dataEvento: new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(espnEv.date)),
-      cardLutas: cardLutas,
-      oddCard: oddCard,
-      lutas: [],
-      punterAnalise: [],
-      apostas: null,
-      concluido: false,
-      isEspn: true
-    };
-    // Evita duplicidade e mescla com a planilha (mantendo análises se houver)
-    const baseName = espnEv.name.split(':')[0].trim().toLowerCase(); // ex: "UFC 306"
-    const existingIdx = _eventos.findIndex(e => e.nome.toLowerCase().includes(baseName));
-    
+    // A ESPN retorna Main Event primeiro; invertemos caso queiramos Main Event por último no cardLutas ou mantemos destaque
+    const evDateObj = espnEv.date ? new Date(espnEv.date) : null;
+    const isFuturoEspn = Boolean(!espnEv.completed && evDateObj && evDateObj >= new Date(hoje.getTime() - 12 * 3600000));
+    const dataStr = evDateObj && !isNaN(evDateObj.getTime())
+      ? new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric' }).format(evDateObj)
+      : '';
+
+    const baseName = espnEv.name.split(':')[0].trim().toLowerCase();
+    const existingIdx = _eventos.findIndex(e => {
+      const en = (e.nome || '').toLowerCase();
+      return en === espnEv.name.toLowerCase() || (baseName.length > 5 && en.includes(baseName));
+    });
+
     if (existingIdx >= 0) {
-      const sheetLutas = _eventos[existingIdx].cardLutas || [];
+      const ex = _eventos[existingIdx];
+      const oldLutas = ex.cardLutas || [];
       cardLutas.forEach(espnLuta => {
         const fVLast = espnLuta.fV.toLowerCase().split(' ').pop();
         const fALast = espnLuta.fA.toLowerCase().split(' ').pop();
-        
-        const sl = sheetLutas.find(l => 
-          (l.fV && l.fV.toLowerCase().includes(fVLast)) || 
+        const sl = oldLutas.find(l =>
+          (l.fV && l.fV.toLowerCase().includes(fVLast)) ||
           (l.fA && l.fA.toLowerCase().includes(fALast))
         );
-        
         if (sl) {
           if (sl.fV && sl.fV.toLowerCase().includes(fVLast)) {
-            espnLuta.oV = sl.oV;
-            espnLuta.oA = sl.oA;
+            if (!espnLuta.oV) espnLuta.oV = sl.oV;
+            if (!espnLuta.oA) espnLuta.oA = sl.oA;
           } else {
-            espnLuta.oV = sl.oA;
-            espnLuta.oA = sl.oV;
+            if (!espnLuta.oV) espnLuta.oV = sl.oA;
+            if (!espnLuta.oA) espnLuta.oA = sl.oV;
           }
+          if (!espnLuta.weightClass) espnLuta.weightClass = sl.weightClass || '';
         }
       });
 
-      _eventos[existingIdx].cardLutas = cardLutas;
-      _eventos[existingIdx].isEspn = true;
-      if (!_eventos[existingIdx].dataEvento) _eventos[existingIdx].dataEvento = new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(espnEv.date));
+      ex.cardLutas = cardLutas;
+      ex.oddCard = { ...ex.oddCard, ...oddCard };
+      if (!ex.lutas || ex.lutas.length === 0) ex.lutas = lutas;
+      else if (espnEv.completed) {
+        lutas.forEach(nl => {
+          if (!nl.resultado) return;
+          const lastW = nl.resultado.toLowerCase().split(' ').pop();
+          const match = ex.lutas.find(ol => ol.luta.toLowerCase().includes(lastW));
+          if (match) { match.resultado = nl.resultado; match.metodo = nl.metodo || match.metodo; }
+        });
+      }
+      ex.isEspn = true;
+      ex.isFuturo = isFuturoEspn;
+      ex.concluido = !isFuturoEspn;
+      if (dataStr) ex.dataEvento = dataStr;
+      // Recalcular PunterMind caso o card tenha mudado
+      ex.punterAnalise = [];
     } else {
-      _eventos.unshift(evObj);
+      _eventos.unshift({
+        nome: espnEv.name,
+        dataEvento: dataStr,
+        cardLutas,
+        oddCard,
+        lutas,
+        punterAnalise: [],
+        apostas: null,
+        concluido: !isFuturoEspn,
+        isFuturo: isFuturoEspn,
+        isEspn: true
+      });
     }
   });
 }
@@ -1046,46 +1308,192 @@ function refreshFighterCards(fighterName) {
   if (updated === 0) renderEvento();
 }
 
+function saveMyTickets() {
+  try { localStorage.setItem('ufc_my_tickets_v1', JSON.stringify(_myTickets)); } catch (e) {}
+}
+
+function getTicketKey(evName, fV, fA) {
+  return `${evName}::${fV} vs ${fA}`;
+}
+
+function toggleMyPick(evName, fV, fA, pick, odd, isZebra, evVal) {
+  const key = getTicketKey(evName, fV, fA);
+  if (_myTickets[key] && _myTickets[key].pick === pick) {
+    delete _myTickets[key];
+  } else {
+    _myTickets[key] = {
+      eventName: evName,
+      fightLabel: `${fV} vs ${fA}`,
+      pick,
+      odd: Number(odd) || null,
+      isZebra: Boolean(isZebra),
+      ev: Number(evVal) || 0
+    };
+  }
+  saveMyTickets();
+  renderEvento();
+  renderMyTicketBar();
+}
+
+function removeMyPick(key) {
+  delete _myTickets[key];
+  saveMyTickets();
+  renderEvento();
+  renderMyTicketBar();
+}
+
+function clearMyTickets() {
+  _myTickets = {};
+  saveMyTickets();
+  renderEvento();
+  renderMyTicketBar();
+}
+
+function setQuickFilter(mode) {
+  _cardFilter.quick = mode;
+  document.querySelectorAll('.qf-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.qf === mode);
+  });
+  renderEvento();
+}
+
+function setCardSearch(val) {
+  _cardFilter.search = String(val || '').trim().toLowerCase();
+  renderEvento();
+}
+
+function renderMyTicketBar() {
+  const bar = document.getElementById('my-ticket-bar');
+  if (!bar) return;
+  const entries = Object.entries(_myTickets);
+  if (entries.length === 0) {
+    bar.innerHTML = '';
+    bar.style.display = 'none';
+    return;
+  }
+  bar.style.display = 'block';
+  const validOdds = entries.map(([, t]) => t.odd).filter(o => o && o > 1);
+  const parlayOdd = validOdds.length > 0 ? validOdds.reduce((acc, o) => acc * o, 1) : null;
+  const baseStake = parseFloat(document.getElementById('bk-base-stake')?.value) || 100;
+  const currency = document.getElementById('bk-currency')?.value || 'R$';
+
+  const chipsHtml = entries.map(([key, t]) => `
+    <span class="ticket-chip">
+      <span>🥊 <strong>${escHtml(t.pick)}</strong>${t.odd ? ` <small>@${t.odd.toFixed(2)}</small>` : ''}</span>
+      <button type="button" class="ticket-chip-rm" data-rm-ticket="${escHtml(key)}" title="Remover">&times;</button>
+    </span>
+  `).join('');
+
+  bar.innerHTML = `
+    <div class="ticket-bar-inner">
+      <div class="ticket-bar-left">
+        <div class="ticket-bar-title">🎟️ Meu Bilhete (${entries.length} ${entries.length === 1 ? 'luta' : 'lutas'})</div>
+        <div class="ticket-chips">${chipsHtml}</div>
+      </div>
+      <div class="ticket-bar-right">
+        ${parlayOdd ? `<div class="ticket-stat"><span>Odd Múltipla</span><strong>${parlayOdd.toFixed(2)}x</strong></div>` : ''}
+        ${parlayOdd ? `<div class="ticket-stat"><span>Retorno (${currency} ${baseStake})</span><strong style="color:var(--green)">${currency} ${(baseStake * parlayOdd).toFixed(2)}</strong></div>` : ''}
+        <button type="button" class="ticket-clear-btn" onclick="clearMyTickets()">Limpar</button>
+      </div>
+    </div>
+  `;
+}
+
 function renderEvento() {
   const sel = document.getElementById('evento-sel');
   if (!sel) return;
   const nome = sel.value;
   const ev = _eventos.find(e => e.nome === nome);
-  if (!ev) return;
+  const cardEl = document.getElementById('fight-cards-container');
 
-  document.getElementById('ev-meta').textContent = ev.dataEvento ? `📅 ${ev.dataEvento}` : '';
+  if (!ev) {
+    document.getElementById('ev-meta').textContent = '';
+    if (cardEl) {
+      cardEl.innerHTML = _currentTab === 'futuros'
+        ? '<div class="empty"><div class="empty-icon">📅</div>Nenhum evento futuro agendado no momento. Sincronizando calendário UFC…</div>'
+        : '<div class="empty"><div class="empty-icon">🥊</div>Nenhum evento encontrado.</div>';
+    }
+    document.getElementById('ev-table-container').innerHTML = '';
+    document.getElementById('ev-apostas-container').innerHTML = '';
+    return;
+  }
+
+  const totalFights = (ev.cardLutas || []).length;
+  const statusPill = ev.isFuturo ? '🟢 Próximo Card' : '🏁 Card Finalizado';
+  document.getElementById('ev-meta').textContent = `${ev.dataEvento ? '📅 ' + ev.dataEvento + ' · ' : ''}${totalFights} lutas · ${statusPill}`;
+
+  // Atualizar contadores nos filtros rápidos
+  const cardAnalyses = (ev.cardLutas || []).map((c, idx) => {
+    const dbA = typeof getFighterData === 'function' ? getFighterData(c.fV) : null;
+    const dbB = typeof getFighterData === 'function' ? getFighterData(c.fA) : null;
+    const analysis = typeof analyzeFight === 'function' ? analyzeFight(c.fV, c.fA, c.oV, c.oA, dbA, dbB, _zebraStats) : null;
+    const key = getTicketKey(ev.nome, c.fV, c.fA);
+    return { c, idx, dbA, dbB, analysis, hasTicket: Boolean(_myTickets[key]) };
+  });
+
+  const qCounts = {
+    all: cardAnalyses.length,
+    ev: cardAnalyses.filter(x => x.analysis && (x.analysis.evA > 0.03 || x.analysis.evB > 0.03)).length,
+    zebra: cardAnalyses.filter(x => x.analysis && (x.analysis.zebraAlert || (x.c.oV >= 2.5 || x.c.oA >= 2.5))).length,
+    ticket: cardAnalyses.filter(x => x.hasTicket).length
+  };
+  document.querySelectorAll('.qf-btn').forEach(btn => {
+    const mode = btn.dataset.qf;
+    const cntEl = btn.querySelector('.qf-count');
+    if (cntEl && qCounts[mode] !== undefined) cntEl.textContent = qCounts[mode];
+  });
+
+  const filtered = cardAnalyses.filter(({ c, analysis, hasTicket }) => {
+    if (_cardFilter.search) {
+      const hay = `${c.fV || ''} ${c.fA || ''} ${c.weightClass || ''}`.toLowerCase();
+      if (!hay.includes(_cardFilter.search)) return false;
+    }
+    if (_cardFilter.quick === 'ev') {
+      return Boolean(analysis && (analysis.evA > 0.03 || analysis.evB > 0.03));
+    }
+    if (_cardFilter.quick === 'zebra') {
+      return Boolean(analysis && (analysis.zebraAlert || c.oV >= 2.5 || c.oA >= 2.5));
+    }
+    if (_cardFilter.quick === 'ticket') {
+      return hasTicket;
+    }
+    return true;
+  });
 
   // SEÇÃO PRINCIPAL: FIGHT CARDS com análise física
-  const cardEl = document.getElementById('fight-cards-container');
-  if (ev.cardLutas && ev.cardLutas.length) {
-    const cards = ev.cardLutas.map((c, idx) => buildFightCard(c, ev, idx));
+  if (filtered.length) {
+    const cards = filtered.map(item => buildFightCard(item.c, ev, item.idx, item.analysis, item.dbA, item.dbB));
     cardEl.innerHTML = `<div class="fight-cards-grid">${cards.join('')}</div>`;
+  } else if (totalFights > 0) {
+    cardEl.innerHTML = '<div class="empty"><div class="empty-icon">🔍</div>Nenhuma luta corresponde ao filtro atual.</div>';
   } else {
     cardEl.innerHTML = '<div class="empty"><div class="empty-icon">🥊</div>Nenhuma luta encontrada para este evento.</div>';
   }
 
+  renderMyTicketBar();
+
   // PunterMind análise tabela
-  const pa = ev.punterAnalise;
+  const pa = ev.punterAnalise || [];
   if (!pa.length) {
     document.getElementById('ev-table-container').innerHTML = '<div class="empty"><div class="empty-icon">📊</div>Nenhuma análise PunterMind encontrada para este evento.</div>';
   } else {
     const rows = pa.map(pm => {
-      const evRaw = (pm.ev || '').trim();
+      const evRaw = String(pm.ev || '').trim();
       const isConsenso = evRaw.toUpperCase().includes('CONSENSO') || !evRaw || evRaw === '0.00';
       const evNum = isConsenso ? 0 : parseFloat(evRaw.replace(',', '.').replace('+', '')) || 0;
       const evTag = isConsenso
-        ? `<span class="badge badge-lock">🔒 CONSENSO</span>`
+        ? `<span class="badge badge-lock">🔒 BASE</span>`
         : evNum > 0
           ? `<span class="badge badge-ev-p">▲ ${evRaw}</span>`
           : `<span class="badge badge-ev-n">▼ ${evRaw}</span>`;
       return `<tr>
-        <td style="font-weight:600">${pm.luta}</td>
-        <td style="font-size:12px;color:var(--text2);max-width:200px">${pm.fisico || '—'}</td>
-        <td style="font-weight:700;color:var(--cyan)">${pm.probReal || pm.probImp || '—'}</td>
+        <td style="font-weight:600">${escHtml(pm.luta)}</td>
+        <td style="font-size:12px;color:var(--text2);max-width:200px">${escHtml(pm.fisico || '—')}</td>
+        <td style="font-weight:700;color:var(--cyan)">${escHtml(pm.probReal || pm.probImp || '—')}</td>
         <td>${evTag}</td>
-        <td style="font-weight:700;color:var(--gold)">${pm.pick ? '🥊 ' + pm.pick : '—'}</td>
-        <td style="font-size:12px;color:var(--text2)">${pm.met || '—'}</td>
-        <td style="font-size:12px;color:var(--text2);max-width:240px;line-height:1.4">${pm.nota || '—'}</td>
+        <td style="font-weight:700;color:var(--gold)">${pm.pick ? '🥊 ' + escHtml(pm.pick) : '—'}</td>
+        <td style="font-size:12px;color:var(--text2)">${escHtml(pm.met || '—')}</td>
+        <td style="font-size:12px;color:var(--text2);max-width:240px;line-height:1.4">${escHtml(pm.nota || '—')}</td>
       </tr>`;
     }).join('');
     document.getElementById('ev-table-container').innerHTML = `
@@ -1099,13 +1507,13 @@ function renderEvento() {
 
   // Apostas sugeridas
   const ap = ev.apostas;
-  if (ap && (ap.simples.selecao || ap.dupla.selecao || ap.tripla.selecao)) {
-    const apostaCards = [ap.simples, ap.dupla, ap.tripla].filter(a => a.selecao).map(a => `
+  if (ap && (ap.simples?.selecao || ap.dupla?.selecao || ap.tripla?.selecao)) {
+    const apostaCards = [ap.simples, ap.dupla, ap.tripla].filter(a => a && a.selecao).map(a => `
       <div class="aposta-card">
-        <div class="ap-tipo">${a.tipo || '—'}</div>
-        <div class="ap-sel">${a.selecao}</div>
-        <div class="ap-odd">${a.odd || '—'}</div>
-        <div class="ap-nota">${a.nota || ''}</div>
+        <div class="ap-tipo">${escHtml(a.tipo || '—')}</div>
+        <div class="ap-sel">${escHtml(a.selecao)}</div>
+        <div class="ap-odd">${escHtml(a.odd || '—')}</div>
+        <div class="ap-nota">${escHtml(a.nota || '')}</div>
       </div>`).join('');
     document.getElementById('ev-apostas-container').innerHTML = `<div class="label-small">🎯 Apostas Sugeridas</div><div class="apostas-grid">${apostaCards}</div>`;
   } else {
@@ -1117,153 +1525,169 @@ function renderEvento() {
   }
 }
 
-// NOVO BUILD FIGHT CARD
-function buildFightCard(c, ev, idx) {
+// NOVO BUILD FIGHT CARD (Sem skeletons infinitos + Tale highlights + Palpite interativo)
+function buildFightCard(c, ev, idx, preAnalysis = null, preDbA = null, preDbB = null) {
   const { fV, oV, fA, oA } = c;
   if (!fV && !fA) return '';
 
-  const editIconV = fV ? `<span class="fc-edit-btn" onclick="openFighterModal('${fV.replace(/'/g, "\\\\'")}')" title="Editar dados físicos de ${fV}">✏️</span>` : '';
-  const editIconA = fA ? `<span class="fc-edit-btn" onclick="openFighterModal('${fA.replace(/'/g, "\\\\'")}')" title="Editar dados físicos de ${fA}">✏️</span>` : '';
+  const editIconV = fV ? `<button type="button" class="fc-edit-btn" data-fighter="${escHtml(fV)}" title="Editar dados físicos de ${escHtml(fV)}">✏️</button>` : '';
+  const editIconA = fA ? `<button type="button" class="fc-edit-btn" data-fighter="${escHtml(fA)}" title="Editar dados físicos de ${escHtml(fA)}">✏️</button>` : '';
 
-  // Dados do DB de lutadores
-  let dbA = typeof getFighterData === 'function' ? getFighterData(fV) : null;
-  let dbB = typeof getFighterData === 'function' ? getFighterData(fA) : null;
+  let dbA = preDbA || (typeof getFighterData === 'function' ? getFighterData(fV) : null);
+  let dbB = preDbB || (typeof getFighterData === 'function' ? getFighterData(fA) : null);
 
-  // Usa dados da ESPN (Scoreboard Server-Side) como fonte primária agora
-  const mapEspnDb = (espnFighter) => {
-    if (!espnFighter) return null;
-    let rec = espnFighter.record;
+  // Mesclar com ESPN sem nunca sobrescrever dados válidos do DB local com placeholders vazios
+  const mergeEspnSafely = (localDb, espnFighter) => {
+    if (!espnFighter) return localDb;
     let w = null, l = null, d = 0;
-    if (rec) {
-      const parts = rec.split('-');
+    if (espnFighter.record) {
+      const parts = String(espnFighter.record).split('-');
       if (parts.length >= 2) {
-        w = parseInt(parts[0]) || 0;
-        l = parseInt(parts[1]) || 0;
-        d = parseInt(parts[2]) || 0;
+        w = parseInt(parts[0], 10);
+        l = parseInt(parts[1], 10);
+        d = parseInt(parts[2], 10) || 0;
       }
     }
+    const base = localDb ? { ...localDb } : {};
     return {
-      wins: espnFighter.wins !== undefined && espnFighter.wins !== null ? espnFighter.wins : w,
-      losses: espnFighter.losses !== undefined && espnFighter.losses !== null ? espnFighter.losses : l,
-      draws: espnFighter.draws !== undefined && espnFighter.draws !== null ? espnFighter.draws : d,
-      height_cm: espnFighter.height_cm || '—',
-      reach_cm: espnFighter.reach_cm || '—',
-      stance: espnFighter.stance || '',
-      espn_photo: espnFighter.photo || null,
-      style: '' 
+      ...base,
+      wins: Number.isFinite(espnFighter.wins) && espnFighter.wins > 0 ? espnFighter.wins : (Number.isFinite(w) && w > 0 ? w : base.wins),
+      losses: Number.isFinite(espnFighter.losses) ? espnFighter.losses : (Number.isFinite(l) ? l : base.losses),
+      draws: Number.isFinite(espnFighter.draws) ? espnFighter.draws : (base.draws || d || 0),
+      height_cm: (espnFighter.height_cm && Number(espnFighter.height_cm) > 0) ? Number(espnFighter.height_cm) : base.height_cm,
+      reach_cm: (espnFighter.reach_cm && Number(espnFighter.reach_cm) > 0) ? Number(espnFighter.reach_cm) : base.reach_cm,
+      stance: espnFighter.stance || base.stance || '',
+      espn_photo: espnFighter.photo || base.espn_photo || null,
+      style: base.style || espnFighter.style || ''
     };
   };
 
-  if (c.f1Obj) dbA = { ...(dbA || {}), ...mapEspnDb(c.f1Obj) };
-  if (c.f2Obj) dbB = { ...(dbB || {}), ...mapEspnDb(c.f2Obj) };
+  if (c.f1Obj) dbA = mergeEspnSafely(dbA, c.f1Obj);
+  if (c.f2Obj) dbB = mergeEspnSafely(dbB, c.f2Obj);
 
-  const fightersToCheck = [
-    { name: fV, dbMerged: dbA },
-    { name: fA, dbMerged: dbB }
-  ];
+  const defaultPhoto = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyMDAgMjAwIj48Y2lyY2xlIGN4PSIxMDAiIGN5PSI3MCIgcj0iNDUiIGZpbGw9IiMyZDJkM2EiLz48cGF0aCBkPSJNMTAwIDEyNWMtNDAgMC03NSAzMC04NSA3NWgxNzBjLTEwLTQ1LTQ1LTc1LTg1LTc1eiIgZmlsbD0iIzJkMmQzYSIvPjwvc3ZnPg==';
+  const photoV = c.espnPhotoV || dbA?.espn_photo;
+  const photoA = c.espnPhotoA || dbB?.espn_photo;
 
-  fightersToCheck.forEach(({name: fighter, dbMerged: db}) => {
-    if (!fighter) return;
-    
-    // Se não temos dados físicos da ESPN no DB, ou se não temos foto (passados), precisamos buscar
-    const isMissingStats = !db || !db.height_cm || db.height_cm === '—' || !db.espn_photo || db.wins === undefined || db.wins === null;
-    
-    // Se já sincronizou uma vez, não tenta de novo, mesmo que a foto seja null
-    const jaTentouEspn = db && (db.not_found_espn === true || db.espn_sync_done === true);
-    
-    if (isMissingStats && window._fetchingEspn[fighter] !== true && window._fetchingEspn[fighter] !== 'not_found' && !jaTentouEspn) {
-      window._fetchingEspn[fighter] = true;
-      window._espnQueue.push(fighter);
-      window._processEspnQueue();
-    }
-  });
-
-  // Fallback Elegante (Silhouette SVG em Base64 para não depender de arquivo local)
-  const defaultPhoto = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyMDAgMjAwIj48Y2lyY2xlIGN4PSIxMDAiIGN5PSI3MCIgcj0iNDUiIGZpbGw9IiMyZDJkM2EiLz48cGF0aCBkPSJNMTAwIDEyNWMtNDAgMC03NSAzMC04NSA3NWgxNzBjLTEwLTQ1LTQ1LTc1LTg1LTc1eiIgZmlsbD0iIzJkMmQzYSIvPjwvc3ZnPg=='; 
-  
-  let photoV = c.espnPhotoV || dbA?.espn_photo;
-  let photoA = c.espnPhotoA || dbB?.espn_photo;
-  
-  const isFetchingV = window._fetchingEspn[fV] === true && !photoV;
-  const isFetchingA = window._fetchingEspn[fA] === true && !photoA;
-
-  const renderPhoto = (url, name, isFetching) => {
-    if (isFetching) return `<div class="tale-skeleton"><div class="skel-photo"></div></div>`;
+  const renderPhoto = (url, name) => {
     const finalUrl = (url && url !== 'null' && url !== 'undefined') ? url : defaultPhoto;
-    
-    return `<div class="tale-photo-wrap"><img src="${finalUrl}" class="tale-photo" loading="eager" decoding="async" fetchpriority="high" onerror="if(this.src !== '${defaultPhoto}'){ this.onerror=null; this.src='${defaultPhoto}'; }" alt="Foto de ${name || 'lutador'}" /></div>`;
+    return `<div class="tale-photo-wrap"><img src="${finalUrl}" class="tale-photo" loading="lazy" decoding="async" onerror="if(this.src !== '${defaultPhoto}'){ this.onerror=null; this.src='${defaultPhoto}'; }" alt="${escHtml(name || 'Lutador')}" /></div>`;
   };
 
-  // Formatadores Tale
-  const fRecord = (db) => db && db.wins !== undefined && db.wins !== null ? `${db.wins}-${db.losses}${db.draws > 0 ? '-'+db.draws : ''}` : '—';
-  const fHeight = (db) => db && db.height_cm ? `${(db.height_cm / 100).toFixed(2)}m` : '—';
-  const fReach = (db) => db && db.reach_cm ? `${db.reach_cm}cm` : '—';
-  const fStance = (db) => db && db.stance ? db.stance : '—';
+  // Formatadores seguros (nunca geram NaNm)
+  const hasRec = db => db && Number.isFinite(Number(db.wins)) && (Number(db.wins) > 0 || Number(db.losses) > 0);
+  const fRecord = db => hasRec(db) ? `${db.wins}-${db.losses}${db.draws > 0 ? '-' + db.draws : ''}` : '—';
+  const fHeight = db => {
+    const h = parseFloat(db?.height_cm);
+    return Number.isFinite(h) && h > 50 ? `${(h / 100).toFixed(2)}m` : '—';
+  };
+  const fReach = db => {
+    const r = parseFloat(db?.reach_cm);
+    return Number.isFinite(r) && r > 50 ? `${Math.round(r)}cm` : '—';
+  };
+  const fStance = db => (db && db.stance) ? db.stance : '—';
 
-  let rV = fRecord(dbA), rA = fRecord(dbB);
-  let hV = fHeight(dbA), hA = fHeight(dbB);
-  let eV = fReach(dbA), eA = fReach(dbB);
-  let sV = fStance(dbA), sA = fStance(dbB);
+  const rV = fRecord(dbA), rA = fRecord(dbB);
+  const hV = fHeight(dbA), hA = fHeight(dbB);
+  const eV = fReach(dbA), eA = fReach(dbB);
+  const sV = fStance(dbA), sA = fStance(dbB);
 
-  // Skeleton rows if fetching
-  if (isFetchingV || isFetchingA) {
-    rV = '<div class="tale-skeleton"><div class="skel-text"></div></div>';
-    rA = '<div class="tale-skeleton"><div class="skel-text"></div></div>';
-    hV = rV; hA = rA; eV = rV; eA = rA; sV = rV; sA = rA;
-  }
+  const hNumV = parseFloat(dbA?.height_cm) || 0, hNumA = parseFloat(dbB?.height_cm) || 0;
+  const rNumV = parseFloat(dbA?.reach_cm) || 0,  rNumA = parseFloat(dbB?.reach_cm) || 0;
+  const hAdvV = hNumV > 0 && hNumA > 0 && hNumV > hNumA;
+  const hAdvA = hNumV > 0 && hNumA > 0 && hNumA > hNumV;
+  const eAdvV = rNumV > 0 && rNumA > 0 && rNumV > rNumA;
+  const eAdvA = rNumV > 0 && rNumA > 0 && rNumA > rNumV;
 
-  // Odds formatting
-  const renderOdds = (oddNum, espnOddStr, isFav) => {
-    if (oddNum) return `<div class="tale-odds ${isFav ? 'fav' : ''}">${oddNum.toFixed(2)}</div>`;
-    if (espnOddStr) return `<div class="tale-odds" style="color:var(--gold); border-color:var(--gold);">${espnOddStr}</div>`;
+  // Análise multi-fator (sempre executada, com ou sem odds de casa)
+  const analysis = preAnalysis || (typeof analyzeFight === 'function' ? analyzeFight(fV, fA, oV, oA, dbA, dbB, _zebraStats) : null);
+
+  // Odds formatting (reais ou estimadas)
+  const renderOdds = (oddNum, estOdd, espnOddStr) => {
+    if (oddNum && oddNum > 1) {
+      const isFav = oddNum < 1.65;
+      return `<div class="tale-odds ${isFav ? 'fav' : ''}">${Number(oddNum).toFixed(2)}</div>`;
+    }
+    if (espnOddStr && espnOddStr !== 'Sem odds') {
+      return `<div class="tale-odds est">${escHtml(espnOddStr)}</div>`;
+    }
+    if (estOdd) {
+      return `<div class="tale-odds est" title="Odd justa estimada pelo modelo">Est. ${Number(estOdd).toFixed(2)}</div>`;
+    }
     return '';
   };
-  const oddsVHtml = renderOdds(oV, c.espnOdds, oV && oV < 1.5);
-  const oddsAHtml = renderOdds(oA, c.espnOdds, oA && oA < 1.5);
-
-  // Análise multi-fator
-  const analysis = (typeof analyzeFight === 'function' && oV && oA)
-    ? analyzeFight(fV, fA, oV, oA, dbA, dbB, _zebraStats)
-    : null;
+  const oddsVHtml = renderOdds(oV, analysis?.oddsEstA, c.espnOdds);
+  const oddsAHtml = renderOdds(oA, analysis?.oddsEstB, c.espnOdds);
 
   // Resultado
   const luta = findLuta(ev, fV || fA);
   const resultado = luta?.resultado || null;
-  const isWinV = resultado && resultado.toLowerCase().includes(fV.toLowerCase().split(' ').pop());
-  const isWinA = resultado && resultado.toLowerCase().includes(fA.toLowerCase().split(' ').pop());
+  const winLastV = (fV || '').toLowerCase().split(' ').pop();
+  const winLastA = (fA || '').toLowerCase().split(' ').pop();
+  const isWinV = Boolean(resultado && winLastV && resultado.toLowerCase().includes(winLastV));
+  const isWinA = Boolean(resultado && winLastA && resultado.toLowerCase().includes(winLastA));
 
-  // Badges (EV+, Zebra, AI Pick)
+  // Barra de probabilidade comparativa
+  const pV = analysis?.probAdjA ? Math.round(analysis.probAdjA * 100) : 50;
+  const pA = 100 - pV;
+
+  // Badges (EV+, Zebra, Pick, Resultado)
   let badges = '';
   if (analysis) {
-    if (analysis.evA > 0.05) badges += `<span class="badge badge-ev-p">EV+ ${fV?.split(' ').pop()}</span>`;
-    if (analysis.evB > 0.05) badges += `<span class="badge badge-ev-p">EV+ ${fA?.split(' ').pop()}</span>`;
-    if (analysis.zebraAlert) badges += `<span class="badge badge-zebra">🦓 ZEBRA</span>`;
-    if (analysis.pickRecommended) badges += `<span class="badge badge-conf-h">🤖 Pick: ${analysis.pickRecommended}</span>`;
+    if (analysis.evA > 0.03) badges += `<span class="badge badge-ev-p">EV+ ${escHtml(fV?.split(' ').pop() || '')} (+${(analysis.evA * 100).toFixed(1)}%)</span>`;
+    if (analysis.evB > 0.03) badges += `<span class="badge badge-ev-p">EV+ ${escHtml(fA?.split(' ').pop() || '')} (+${(analysis.evB * 100).toFixed(1)}%)</span>`;
+    if (analysis.zebraAlert) badges += `<span class="badge badge-zebra">🦓 ALERTA ZEBRA</span>`;
+    if (analysis.predictedMethod) badges += `<span class="badge badge-method">🥊 ${escHtml(analysis.predictedMethod)}</span>`;
   }
   if (resultado) {
-    badges += `<span class="badge" style="background:rgba(52,211,153,0.1);color:var(--green);border:1px solid rgba(52,211,153,0.3)">✅ Venceu: ${resultado}</span>`;
+    badges += `<span class="badge badge-win">✅ Venceu: ${escHtml(resultado)}${luta?.metodo ? ' (' + escHtml(luta.metodo) + ')' : ''}</span>`;
   }
+
+  // Banner do Pick recomendado do modelo
+  const pickBanner = analysis?.pickRecommended ? `
+    <div class="fc-pick-banner ${analysis.pickHasValue ? 'has-ev' : ''}">
+      <span class="fc-pick-lbl">🤖 Modelo PunterMMA:</span>
+      <strong class="fc-pick-name">${escHtml(analysis.pickRecommended)}</strong>
+      <span class="fc-pick-conf">${analysis.pickConf}% conf.${analysis.pickIsEstimate ? ' (Est.)' : ''}</span>
+    </div>
+  ` : '';
+
+  // Ticket interativo do usuário ("Meu Palpite")
+  const tKey = getTicketKey(ev.nome, fV, fA);
+  const myPick = _myTickets[tKey]?.pick || '';
+  const selBtnV = `<button type="button" class="fc-pick-btn ${myPick === fV ? 'picked' : ''}" data-pick-ev="${escHtml(ev.nome)}" data-pick-fv="${escHtml(fV)}" data-pick-fa="${escHtml(fA)}" data-pick-name="${escHtml(fV)}" data-pick-odd="${oV || analysis?.oddsEstA || ''}" data-pick-zebra="${(oV || 0) >= 2.5 ? '1' : '0'}" data-pick-eval="${analysis?.evA || 0}">${myPick === fV ? '✓ Meu Palpite' : 'Palpitar'}</button>`;
+  const selBtnA = `<button type="button" class="fc-pick-btn ${myPick === fA ? 'picked' : ''}" data-pick-ev="${escHtml(ev.nome)}" data-pick-fv="${escHtml(fV)}" data-pick-fa="${escHtml(fA)}" data-pick-name="${escHtml(fA)}" data-pick-odd="${oA || analysis?.oddsEstB || ''}" data-pick-zebra="${(oA || 0) >= 2.5 ? '1' : '0'}" data-pick-eval="${analysis?.evB || 0}">${myPick === fA ? '✓ Meu Palpite' : 'Palpitar'}</button>`;
+
+  const weightLabel = c.weightClass || dbA?.weight_class || dbB?.weight_class || 'UFC Bout';
+  const segLabel = c.cardSegment || (idx === 0 ? 'Main Event' : idx === 1 ? 'Co-Main' : '');
+  const styleVTag = dbA?.style ? `<span class="fc-style-tag">${escHtml(dbA.style)}</span>` : '';
+  const styleATag = dbB?.style ? `<span class="fc-style-tag">${escHtml(dbB.style)}</span>` : '';
 
   // Botão de IA
   const aiBtnId = `ai-btn-${idx}`;
   const recPick = analysis?.pickRecommended ? analysis.pickRecommended.replace(/'/g, "\\'") : '';
   const aiHtml = `
-    <div id="${aiBtnId}-container" style="margin-top: 12px; width: 100%;">
-      <button class="ai-btn-card" onclick="analyzeFightWithAI('${(fV||'').replace(/'/g, "\\'")}', '${(fA||'').replace(/'/g, "\\'")}', '${aiBtnId}-container', '${recPick}')">
-        🤖 Análise de IA
+    <div id="${aiBtnId}-container" style="margin-top: 10px; width: 100%;">
+      <button type="button" class="ai-btn-card" onclick="analyzeFightWithAI('${(fV||'').replace(/'/g, "\\'")}', '${(fA||'').replace(/'/g, "\\'")}', '${aiBtnId}-container', '${recPick}')">
+        🤖 Análise Tática IA
       </button>
     </div>
   `;
 
   return `
-    <div class="tale-card" style="animation-delay:${idx * 0.05}s" data-fighters="${(fV||'').toLowerCase()}|${(fA||'').toLowerCase()}" data-card-idx="${idx}">
-      ${(dbA?.weight_class || dbB?.weight_class) ? `<div class="tale-header">${dbA?.weight_class || dbB?.weight_class}</div>` : ''}
-      
+    <div class="tale-card ${myPick ? 'has-my-pick' : ''}" style="animation-delay:${Math.min(idx, 12) * 0.04}s" data-fighters="${escHtml((fV||'').toLowerCase())}|${escHtml((fA||'').toLowerCase())}" data-card-idx="${idx}">
+      <div class="tale-header">
+        <span>${escHtml(weightLabel)}</span>
+        ${segLabel ? `<span class="tale-seg">${escHtml(segLabel)}</span>` : ''}
+      </div>
+
       <div class="tale-body">
-        <div class="tale-fighter left ${isWinV ? 'winner' : ''}">
-          ${renderPhoto(photoV, fV, isFetchingV)}
-          <div class="tale-name">${fV || '—'} ${editIconV}</div>
+        <div class="tale-fighter left ${isWinV ? 'winner' : ''} ${myPick === fV ? 'user-picked' : ''}">
+          ${renderPhoto(photoV, fV)}
+          <div class="tale-name">${escHtml(fV || '—')} ${editIconV}</div>
+          ${styleVTag}
           ${oddsVHtml}
+          ${selBtnV}
         </div>
 
         <div class="tale-center">
@@ -1273,32 +1697,45 @@ function buildFightCard(c, ev, idx) {
             <span class="val right">${rA}</span>
           </div>
           <div class="tale-row">
-            <span class="val left">${hV}</span>
+            <span class="val left ${hAdvV ? 'adv' : ''}">${hV}</span>
             <span class="lbl">ALTURA</span>
-            <span class="val right">${hA}</span>
+            <span class="val right ${hAdvA ? 'adv' : ''}">${hA}</span>
           </div>
           <div class="tale-row">
-            <span class="val left">${eV}</span>
-            <span class="lbl">ENVERGADURA</span>
-            <span class="val right">${eA}</span>
+            <span class="val left ${eAdvV ? 'adv' : ''}">${eV}</span>
+            <span class="lbl">ENVERG.</span>
+            <span class="val right ${eAdvA ? 'adv' : ''}">${eA}</span>
           </div>
           <div class="tale-row">
-            <span class="val left">${sV}</span>
+            <span class="val left">${escHtml(sV)}</span>
             <span class="lbl">BASE</span>
-            <span class="val right">${sA}</span>
+            <span class="val right">${escHtml(sA)}</span>
           </div>
         </div>
 
-        <div class="tale-fighter right ${isWinA ? 'winner' : ''}">
-          ${renderPhoto(photoA, fA, isFetchingA)}
-          <div class="tale-name">${fA || '—'} ${editIconA}</div>
+        <div class="tale-fighter right ${isWinA ? 'winner' : ''} ${myPick === fA ? 'user-picked' : ''}">
+          ${renderPhoto(photoA, fA)}
+          <div class="tale-name">${escHtml(fA || '—')} ${editIconA}</div>
+          ${styleATag}
           ${oddsAHtml}
+          ${selBtnA}
         </div>
       </div>
 
-      <div class="tale-badges">
-        ${badges}
+      <div class="prob-split">
+        <div class="prob-split-labels">
+          <span>${pV}%</span>
+          <span class="prob-split-title">PROBABILIDADE MODELO</span>
+          <span>${pA}%</span>
+        </div>
+        <div class="prob-split-track">
+          <div class="prob-split-a" style="width:${pV}%"></div>
+          <div class="prob-split-b" style="width:${pA}%"></div>
+        </div>
       </div>
+
+      ${pickBanner}
+      <div class="tale-badges">${badges}</div>
       ${aiHtml}
     </div>
   `;
@@ -1541,11 +1978,11 @@ function populateEventSelector(tabId) {
     return null;
   }
 
-  // Separar futuros (incluindo hoje) e passados
-  const futuros  = _eventos.filter(e => { const d = evDate(e); return !d || d >= hoje; });
-  const passados = _eventos.filter(e => { const d = evDate(e); return d && d < hoje; });
+  // Separar estritamente usando isFuturo quando definido (com fallback por data)
+  const futuros  = _eventos.filter(e => typeof e.isFuturo === 'boolean' ? e.isFuturo : (!evDate(e) || evDate(e) >= hoje));
+  const passados = _eventos.filter(e => typeof e.isFuturo === 'boolean' ? !e.isFuturo : (evDate(e) && evDate(e) < hoje));
 
-  // Decidir lista ativa com base na aba
+  // Decidir lista ativa com base na aba (sem misturar passados em futuros!)
   let listaAtiva;
   if (tabId === 'futuros') {
     listaAtiva = futuros;
@@ -1554,8 +1991,6 @@ function populateEventSelector(tabId) {
   } else {
     listaAtiva = passados.length ? passados : _eventos;
   }
-  // Se a lista estiver vazia por algum motivo, mostramos todos
-  if (!listaAtiva.length) listaAtiva = _eventos;
 
   // Preencher <select> oculto (todos os eventos da lista ativa)
   listaAtiva.forEach(ev => {
@@ -1714,7 +2149,7 @@ function updateStakesCalculator() {
   const stakesList = [];
   (ev.cardLutas || []).forEach(c => {
     const { fV, oV, fA, oA } = c;
-    if (!fV || !fA || !oV || !oA) return;
+    if (!fV || !fA) return;
 
     const dbA = getFighterData(fV);
     const dbB = getFighterData(fA);
@@ -1723,7 +2158,10 @@ function updateStakesCalculator() {
     if (analysis && analysis.pickRecommended) {
       const pickName = analysis.pickRecommended;
       const isV = pickName.toLowerCase() === fV.toLowerCase();
-      const odds = isV ? oV : oA;
+      const rawOdd = isV ? oV : oA;
+      const estOdd = isV ? analysis.oddsEstA : analysis.oddsEstB;
+      const odds = (rawOdd && rawOdd > 1) ? rawOdd : (estOdd || 1.90);
+      const isEst = !(rawOdd && rawOdd > 1);
       const prob = isV ? analysis.probAdjA : analysis.probAdjB;
       const evValue = isV ? analysis.evA : analysis.evB;
       const confidence = isV ? analysis.confidenceA : analysis.confidenceB;
@@ -1732,15 +2170,16 @@ function updateStakesCalculator() {
         fight: `${fV} vs ${fA}`,
         pick: pickName,
         odds,
+        isEst,
         prob,
-        ev: evValue,
+        ev: evValue || 0,
         confidence
       });
     }
   });
 
   if (stakesList.length === 0) {
-    container.innerHTML = `<div class="empty" style="padding: 24px;"><div class="empty-icon">💸</div>Nenhum palpite recomendado com valor esperado positivo (EV+) para este card.</div>`;
+    container.innerHTML = `<div class="empty" style="padding: 24px;"><div class="empty-icon">💸</div>Nenhum palpite calculável para este card.</div>`;
     return;
   }
 
@@ -1781,7 +2220,7 @@ function updateStakesCalculator() {
       <tr>
         <td><strong>${p.fight}</strong></td>
         <td><span style="color:var(--gold);font-weight:700">🥊 ${p.pick}</span></td>
-        <td style="font-weight:600">${p.odds.toFixed(2)}</td>
+        <td style="font-weight:600">${p.isEst ? '<span style="color:var(--text3);font-size:11px">Est.</span> ' : ''}${p.odds.toFixed(2)}</td>
         <td>${(p.prob * 100).toFixed(1)}%</td>
         <td class="${evCls}">${(p.ev >= 0 ? '+' : '')}${p.ev.toFixed(3)}</td>
         <td><span class="badge ${confClass}">${p.confidence}%</span></td>
@@ -1851,25 +2290,32 @@ function closeFighterModal() {
 function saveFighterStats() {
   if (!_currentEditingFighter) return;
 
-  const hVal = parseFloat(document.getElementById('fighter-height').value);
-  const rVal = parseFloat(document.getElementById('fighter-reach').value);
+  const hRaw = document.getElementById('fighter-height').value;
+  const rRaw = document.getElementById('fighter-reach').value;
+  const hVal = hRaw ? parseFloat(hRaw) : null;
+  const rVal = rRaw ? parseFloat(rRaw) : null;
   const stanceVal = document.getElementById('fighter-stance').value;
   const styleVal = document.getElementById('fighter-style').value;
 
-  if (isNaN(hVal) || isNaN(rVal) || hVal < 100 || rVal < 100) {
-    alert('Insira valores válidos de altura e envergadura (mínimo de 100 cm).');
+  if ((hVal !== null && (isNaN(hVal) || hVal < 100)) || (rVal !== null && (isNaN(rVal) || rVal < 100))) {
+    alert('Se preencher altura ou envergadura, insira valores válidos (mínimo de 100 cm).');
     return;
   }
 
+  const prev = getFighterData(_currentEditingFighter) || {};
   saveCustomFighter(_currentEditingFighter, {
-    height_cm: hVal,
-    reach_cm: rVal,
+    ...prev,
+    ...(hVal ? { height_cm: hVal } : {}),
+    ...(rVal ? { reach_cm: rVal } : {}),
     stance: stanceVal,
     style: styleVal
   });
 
+  if (styleVal) _lutadores[_currentEditingFighter.toLowerCase()] = styleVal;
   closeFighterModal();
+  ensureAllEventsAnalyzed();
   renderEvento();
+  renderAll();
 }
 
 // ── INIT ────────────────────────────────────────────────────────
@@ -1881,11 +2327,44 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  const searchEl = document.getElementById('card-search-input');
+  if (searchEl) {
+    searchEl.addEventListener('input', e => setCardSearch(e.target.value));
+  }
+
   loadData();
 });
 
-// Event listener centralizado para modal de lutador
+// Event listeners centralizados (modal de lutador + palpites + bilhete)
 document.addEventListener('click', e => {
-  const btn = e.target.closest('.fc-edit-btn');
-  if (btn) openFighterModal(btn.dataset.fighter);
+  const editBtn = e.target.closest('.fc-edit-btn');
+  if (editBtn) {
+    openFighterModal(editBtn.dataset.fighter);
+    return;
+  }
+
+  const pickBtn = e.target.closest('.fc-pick-btn');
+  if (pickBtn) {
+    toggleMyPick(
+      pickBtn.dataset.pickEv,
+      pickBtn.dataset.pickFv,
+      pickBtn.dataset.pickFa,
+      pickBtn.dataset.pickName,
+      pickBtn.dataset.pickOdd,
+      pickBtn.dataset.pickZebra === '1',
+      pickBtn.dataset.pickEval
+    );
+    return;
+  }
+
+  const rmTicketBtn = e.target.closest('.ticket-chip-rm');
+  if (rmTicketBtn) {
+    removeMyPick(rmTicketBtn.dataset.rmTicket);
+    return;
+  }
+
+  const qfBtn = e.target.closest('.qf-btn');
+  if (qfBtn) {
+    setQuickFilter(qfBtn.dataset.qf);
+  }
 });

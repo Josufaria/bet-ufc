@@ -1467,8 +1467,8 @@ footer a:hover { text-decoration: underline; }
 
 /* -- TALE OF THE TAPE REDESIGN -- */
 .tale-card {
-  background: var(--card1);
-  border: 1px solid var(--border1);
+  background: var(--card);
+  border: 1px solid var(--border);
   border-radius: 12px;
   padding: 16px;
   margin-bottom: 16px;
@@ -1483,19 +1483,35 @@ footer a:hover { text-decoration: underline; }
   box-shadow: var(--shadow);
   border-color: var(--border2);
 }
+.tale-card.has-my-pick {
+  border-color: rgba(232,184,75,0.55);
+  box-shadow: 0 0 0 1px rgba(232,184,75,0.2);
+}
 .tale-header {
-  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   font-size: 11px;
   color: var(--text3);
   text-transform: uppercase;
-  letter-spacing: 1px;
+  letter-spacing: 0.9px;
   margin-bottom: 12px;
-  font-weight: 600;
+  font-weight: 700;
+}
+.tale-seg {
+  background: rgba(232,184,75,0.12);
+  color: var(--gold);
+  border: 1px solid rgba(232,184,75,0.3);
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10px;
 }
 .tale-body {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
 }
 .tale-fighter {
   display: flex;
@@ -1506,10 +1522,10 @@ footer a:hover { text-decoration: underline; }
 }
 .tale-photo-wrap {
   position: relative;
-  width: 80px;
-  height: 80px;
+  width: 78px;
+  height: 78px;
   border-radius: 50%;
-  background: var(--bg-color);
+  background: var(--bg3);
   border: 2px solid var(--border2);
   margin-bottom: 8px;
   overflow: hidden;
@@ -1519,49 +1535,103 @@ footer a:hover { text-decoration: underline; }
 }
 .tale-fighter.winner .tale-photo-wrap {
   border-color: var(--green);
-  box-shadow: 0 0 10px rgba(52,211,153,0.3);
+  box-shadow: 0 0 12px rgba(52,211,153,0.35);
+}
+.tale-fighter.user-picked .tale-photo-wrap {
+  border-color: var(--gold);
+  box-shadow: 0 0 12px rgba(232,184,75,0.35);
 }
 .tale-photo {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  transform: scale(1.1); /* Zoom slightly to cut out empty space */
+  transform: scale(1.08);
 }
 .tale-name {
   font-size: 14px;
   font-weight: 700;
-  color: var(--text1);
-  line-height: 1.2;
+  color: var(--text);
+  line-height: 1.25;
+}
+.fc-edit-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 12px;
+  opacity: 0.7;
+  padding: 0 2px;
+  transition: opacity 0.15s, transform 0.15s;
+}
+.fc-edit-btn:hover {
+  opacity: 1;
+  transform: scale(1.15);
+}
+.fc-style-tag {
+  margin-top: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--cyan);
+  background: rgba(0,212,255,0.08);
+  border: 1px solid rgba(0,212,255,0.22);
+  padding: 1px 7px;
+  border-radius: 999px;
 }
 .tale-odds {
-  margin-top: 4px;
+  margin-top: 6px;
   font-size: 13px;
   font-weight: 700;
   color: var(--text2);
-  background: var(--bg-color);
-  padding: 2px 8px;
+  background: var(--bg3);
+  padding: 2px 9px;
   border-radius: 12px;
-  border: 1px solid var(--border1);
+  border: 1px solid var(--border);
 }
 .tale-odds.fav {
-  background: rgba(52,211,153,0.1);
+  background: rgba(52,211,153,0.12);
   color: var(--green);
-  border-color: rgba(52,211,153,0.3);
+  border-color: rgba(52,211,153,0.35);
+}
+.tale-odds.est {
+  color: var(--gold);
+  border-color: rgba(232,184,75,0.32);
+  font-size: 11px;
+}
+.fc-pick-btn {
+  margin-top: 8px;
+  background: rgba(255,255,255,0.04);
+  color: var(--text2);
+  border: 1px solid var(--border2);
+  border-radius: 8px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.18s;
+}
+.fc-pick-btn:hover {
+  border-color: var(--gold);
+  color: var(--gold);
+}
+.fc-pick-btn.picked {
+  background: rgba(232,184,75,0.18);
+  border-color: var(--gold);
+  color: var(--gold);
+  font-weight: 700;
 }
 .tale-center {
   flex: 1;
-  padding: 0 10px;
+  padding: 0 8px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
 .tale-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
   font-size: 12px;
-  background: rgba(255,255,255,0.02);
-  border-radius: 4px;
+  background: rgba(255,255,255,0.025);
+  border-radius: 5px;
   padding: 4px 8px;
 }
 .tale-row .lbl {
@@ -1569,31 +1639,261 @@ footer a:hover { text-decoration: underline; }
   color: var(--text3);
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  width: 40%;
+  width: 36%;
   text-align: center;
 }
 .tale-row .val {
   font-weight: 600;
-  color: var(--text1);
-  width: 30%;
+  color: var(--text);
+  width: 32%;
+}
+.tale-row .val.adv {
+  color: var(--green);
+  font-weight: 700;
 }
 .tale-row .val.left { text-align: left; }
 .tale-row .val.right { text-align: right; }
 .tale-row .val.win { color: var(--green); }
 .tale-row .val.lose { color: var(--red); }
 
+/* Probabilidade Split Bar */
+.prob-split {
+  margin-top: 12px;
+}
+.prob-split-labels {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text2);
+  margin-bottom: 4px;
+}
+.prob-split-title {
+  font-size: 9px;
+  letter-spacing: 0.8px;
+  color: var(--text3);
+  font-weight: 600;
+}
+.prob-split-track {
+  display: flex;
+  height: 6px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--bg3);
+}
+.prob-split-a {
+  background: linear-gradient(90deg, var(--cyan), #38bdf8);
+  transition: width 0.3s ease;
+}
+.prob-split-b {
+  background: linear-gradient(90deg, #a855f7, #ec4899);
+  transition: width 0.3s ease;
+}
+
+/* Model Pick Banner */
+.fc-pick-banner {
+  margin-top: 10px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: 12px;
+  flex-wrap: wrap;
+}
+.fc-pick-banner.has-ev {
+  background: rgba(52,211,153,0.08);
+  border-color: rgba(52,211,153,0.3);
+}
+.fc-pick-lbl { color: var(--text2); font-size: 11px; }
+.fc-pick-name { color: var(--gold); font-weight: 700; }
+.fc-pick-conf { color: var(--cyan); font-size: 11px; font-weight: 600; }
+
+/* Sync Pill & Toolbar */
+.sync-pill {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg3);
+  color: var(--text2);
+}
+.sync-pill.sync-ok {
+  color: var(--green);
+  border-color: rgba(52,211,153,0.35);
+  background: rgba(52,211,153,0.08);
+}
+.sync-pill.sync-loading {
+  color: var(--gold);
+  border-color: rgba(232,184,75,0.35);
+  background: rgba(232,184,75,0.08);
+}
+.cards-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+.cards-search-wrap {
+  position: relative;
+  flex: 1;
+  min-width: 220px;
+  max-width: 380px;
+}
+.cards-search-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 13px;
+  pointer-events: none;
+}
+#card-search-input {
+  width: 100%;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 9px 12px 9px 34px;
+  color: var(--text);
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+#card-search-input:focus {
+  border-color: var(--cyan);
+}
+.qf-group {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.qf-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--text2);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.18s;
+}
+.qf-btn:hover {
+  border-color: var(--border2);
+  color: var(--text);
+}
+.qf-btn.active {
+  background: rgba(0,212,255,0.12);
+  border-color: var(--cyan);
+  color: var(--cyan);
+}
+.qf-count {
+  font-size: 10px;
+  background: rgba(255,255,255,0.08);
+  padding: 1px 6px;
+  border-radius: 999px;
+}
+
+/* My Parlay Ticket Bar */
+.ticket-bar-inner {
+  background: linear-gradient(135deg, rgba(232,184,75,0.12), rgba(0,212,255,0.08));
+  border: 1px solid rgba(232,184,75,0.4);
+  border-radius: 12px;
+  padding: 12px 16px;
+  margin-bottom: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.ticket-bar-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--gold);
+  margin-bottom: 6px;
+}
+.ticket-chips {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.ticket-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg3);
+  border: 1px solid var(--border2);
+  border-radius: 8px;
+  padding: 4px 8px;
+  font-size: 12px;
+  color: var(--text);
+}
+.ticket-chip-rm {
+  background: transparent;
+  border: none;
+  color: var(--text3);
+  cursor: pointer;
+  font-size: 15px;
+  line-height: 1;
+}
+.ticket-chip-rm:hover { color: var(--red); }
+.ticket-bar-right {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.ticket-stat {
+  display: flex;
+  flex-direction: column;
+  font-size: 11px;
+  color: var(--text2);
+}
+.ticket-stat strong { font-size: 15px; color: var(--text); }
+.ticket-clear-btn {
+  background: rgba(248,113,113,0.12);
+  border: 1px solid rgba(248,113,113,0.35);
+  color: var(--red);
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.badge-method {
+  background: rgba(139,92,246,0.12);
+  color: #c4b5fd;
+  border: 1px solid rgba(139,92,246,0.3);
+}
+.badge-win {
+  background: rgba(52,211,153,0.12);
+  color: var(--green);
+  border: 1px solid rgba(52,211,153,0.35);
+}
+
 /* Skeleton Loader */
 .tale-skeleton {
   animation: pulse 1.5s infinite;
 }
 .tale-skeleton .skel-photo {
-  width: 80px; height: 80px; border-radius: 50%; background: var(--border1); margin-bottom: 8px;
+  width: 80px; height: 80px; border-radius: 50%; background: var(--border); margin-bottom: 8px;
 }
 .tale-skeleton .skel-text {
-  width: 60px; height: 12px; background: var(--border1); border-radius: 4px; margin-bottom: 4px;
+  width: 60px; height: 12px; background: var(--border); border-radius: 4px; margin-bottom: 4px;
 }
 .tale-skeleton .skel-row {
-  width: 100%; height: 20px; background: var(--border1); border-radius: 4px;
+  width: 100%; height: 20px; background: var(--border); border-radius: 4px;
 }
 @keyframes pulse {
   0% { opacity: 1; }
@@ -1605,7 +1905,7 @@ footer a:hover { text-decoration: underline; }
   display: flex;
   justify-content: center;
   gap: 6px;
-  margin-top: 12px;
+  margin-top: 10px;
   flex-wrap: wrap;
 }
 
@@ -1613,9 +1913,9 @@ footer a:hover { text-decoration: underline; }
 /* Skeleton Screen Sync */
 #loading { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 50vh; padding: 20px; }
 .skeleton-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 15px; width: 100%; max-width: 1200px; margin-top: 20px; }
-.skeleton-card { background: var(--bg-card); border-radius: 12px; height: 180px; display: flex; align-items: center; justify-content: space-between; padding: 20px; border: 1px solid var(--border); }
-.skel-photo { width: 90px; height: 90px; border-radius: 50%; background: linear-gradient(90deg, var(--bg-card) 25%, var(--border) 50%, var(--bg-card) 75%); background-size: 200% 100%; animation: loadingSkel 1.5s infinite; }
-.skel-vs { width: 40px; height: 20px; border-radius: 4px; background: linear-gradient(90deg, var(--bg-card) 25%, var(--border) 50%, var(--bg-card) 75%); background-size: 200% 100%; animation: loadingSkel 1.5s infinite; }
+.skeleton-card { background: var(--card); border-radius: 12px; height: 180px; display: flex; align-items: center; justify-content: space-between; padding: 20px; border: 1px solid var(--border); }
+.skel-photo { width: 90px; height: 90px; border-radius: 50%; background: linear-gradient(90deg, var(--card) 25%, var(--border) 50%, var(--card) 75%); background-size: 200% 100%; animation: loadingSkel 1.5s infinite; }
+.skel-vs { width: 40px; height: 20px; border-radius: 4px; background: linear-gradient(90deg, var(--card) 25%, var(--border) 50%, var(--card) 75%); background-size: 200% 100%; animation: loadingSkel 1.5s infinite; }
 @keyframes loadingSkel { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 
 /* ══════════════════════════════════════════
@@ -1673,7 +1973,7 @@ footer a:hover { text-decoration: underline; }
     order: 3;
     padding: 16px 0 0 0;
     margin-top: 12px;
-    border-top: 1px solid var(--border1);
+    border-top: 1px solid var(--border);
   }
   .tale-photo-wrap {
     width: 65px;

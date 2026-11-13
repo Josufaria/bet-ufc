@@ -65,8 +65,13 @@ function getStyleWinRate(styleA, styleB) {
 function calcPhysicalAdvantage(fighterA, fighterB) {
   if (!fighterA || !fighterB) return { total: 0, heightAdv: 0, reachAdv: 0, heightDiff: 0, reachDiff: 0 };
 
-  const heightDiff = fighterA.height_cm - fighterB.height_cm;  // cm
-  const reachDiff  = fighterA.reach_cm  - fighterB.reach_cm;   // cm
+  const hA = parseFloat(fighterA.height_cm);
+  const hB = parseFloat(fighterB.height_cm);
+  const rA = parseFloat(fighterA.reach_cm);
+  const rB = parseFloat(fighterB.reach_cm);
+
+  const heightDiff = (Number.isFinite(hA) && hA > 0 && Number.isFinite(hB) && hB > 0) ? Math.round((hA - hB) * 10) / 10 : 0;
+  const reachDiff  = (Number.isFinite(rA) && rA > 0 && Number.isFinite(rB) && rB > 0) ? Math.round((rA - rB) * 10) / 10 : 0;
 
   // Normalizar: cada 5cm = ±0.25 de vantagem (máx ±1.0)
   const heightAdv = Math.max(-1, Math.min(1, heightDiff / 20));
@@ -76,6 +81,49 @@ function calcPhysicalAdvantage(fighterA, fighterB) {
   const total = (reachAdv * 0.70) + (heightAdv * 0.30);
 
   return { total, heightAdv, reachAdv, heightDiff, reachDiff };
+}
+
+/**
+ * 🏆 Calcula vantagem de cartel (win rate relativo)
+ */
+function calcWinRateFactor(fA, fB) {
+  function winRate(f) {
+    if (!f) return null;
+    const w = parseFloat(f.wins) || 0;
+    const l = parseFloat(f.losses) || 0;
+    const d = parseFloat(f.draws) || 0;
+    const tot = w + l + d;
+    if (tot < 3) return null;
+    return w / tot;
+  }
+  const wrA = winRate(fA);
+  const wrB = winRate(fB);
+  if (wrA === null || wrB === null) return 0;
+  return Math.max(-0.25, Math.min(0.25, (wrA - wrB)));
+}
+
+/**
+ * 🥊 Prevê método provável de vitória com base nos estilos e taxa de finalização
+ */
+function predictFinishMethod(winnerFighter, probWinner) {
+  const w = parseFloat(winnerFighter?.wins) || 0;
+  const ko = parseFloat(winnerFighter?.ko_wins) || 0;
+  const sub = parseFloat(winnerFighter?.sub_wins) || 0;
+  if (w >= 4) {
+    const koRate = ko / w;
+    const subRate = sub / w;
+    if (koRate >= 0.45 && koRate >= subRate) return 'KO/TKO';
+    if (subRate >= 0.35 && subRate > koRate) return 'Submissão';
+  }
+  const style = (winnerFighter?.style || '').toLowerCase();
+  if (style.includes('striker') || style.includes('kickbox') || style.includes('box') || style.includes('muay')) {
+    return probWinner >= 0.62 ? 'KO/TKO' : 'Decisão';
+  }
+  if (style.includes('grappler') || style.includes('bjj') || style.includes('jiu')) {
+    return probWinner >= 0.60 ? 'Submissão' : 'Decisão';
+  }
+  if (style.includes('wrestl')) return 'Decisão';
+  return probWinner >= 0.68 ? 'Via Rápida' : 'Decisão';
 }
 
 /**
@@ -170,17 +218,30 @@ function analyzeFight(nameA, nameB, oddsA, oddsB, fighterA, fighterB, zebraStats
     const styleFactorEst = styleWREst - 0.50;
     const ageFactorEst = calcAgeFactor(fighterA?.age, fighterB?.age);
     const finishingFactorEst = calcFinishingFactor(fighterA, fighterB);
+    const winRateFactorEst = calcWinRateFactor(fighterA, fighterB);
 
-    const score = (physEst.total * 0.5) + (styleFactorEst * 0.3) + (ageFactorEst * 0.15) + (finishingFactorEst * 0.05);
+    const score = (physEst.total * 0.35) + (styleFactorEst * 0.25) + (ageFactorEst * 0.15) + (finishingFactorEst * 0.05) + (winRateFactorEst * 0.20);
+    const probAdjA = Math.max(0.20, Math.min(0.80, 0.50 + score * 0.55));
+    const probAdjB = 1 - probAdjA;
 
     result.physical = physEst;
     result.ageFactor = ageFactorEst;
     result.finishingFactor = finishingFactorEst;
-    result.pickRecommended = score >= 0 ? nameA : nameB;
-    result.pickConf = Math.round(50 + Math.min(20, Math.abs(score) * 40));
+    result.probImplA = 0.50;
+    result.probImplB = 0.50;
+    result.probAdjA = probAdjA;
+    result.probAdjB = probAdjB;
+    result.oddsEstA = +(1 / probAdjA).toFixed(2);
+    result.oddsEstB = +(1 / probAdjB).toFixed(2);
+    result.confidenceA = Math.round(50 + Math.min(25, Math.abs(probAdjA - 0.5) * 90));
+    result.confidenceB = 100 - result.confidenceA;
+    result.pickRecommended = probAdjA >= probAdjB ? nameA : nameB;
+    result.pickConf = Math.max(result.confidenceA, result.confidenceB);
     result.pickHasValue = false;
     result.pickIsEstimate = true;
-    result.factors = buildFactors(physEst, styleWREst, fighterA, fighterB, 0.5, 0.5 + score, ageFactorEst, finishingFactorEst);
+    const winnerObj = probAdjA >= probAdjB ? fighterA : fighterB;
+    result.predictedMethod = predictFinishMethod(winnerObj, Math.max(probAdjA, probAdjB));
+    result.factors = buildFactors(physEst, styleWREst, fighterA, fighterB, 0.5, probAdjA, ageFactorEst, finishingFactorEst);
     return result;
   }
 
@@ -199,11 +260,12 @@ function analyzeFight(nameA, nameB, oddsA, oddsB, fighterA, fighterB, zebraStats
   const styleWR_A = getStyleWinRate(fighterA?.style, fighterB?.style);
   const styleFactor = styleWR_A - 0.50; // -0.5 a +0.5
 
-  // 4. Fator de idade (NOVO)
+  // 4. Fator de idade & cartel
   const ageFactor = calcAgeFactor(fighterA?.age, fighterB?.age);
   result.ageFactor = ageFactor;
+  const winRateFactor = calcWinRateFactor(fighterA, fighterB);
 
-  // 5. Fator finishing rate (NOVO)
+  // 5. Fator finishing rate
   const finishingFactor = calcFinishingFactor(fighterA, fighterB);
   result.finishingFactor = finishingFactor;
 
@@ -212,12 +274,14 @@ function analyzeFight(nameA, nameB, oddsA, oddsB, fighterA, fighterB, zebraStats
   const styleWeight    = 0.08;  // máx  8% de ajuste por estilo
   const ageWeight      = 0.05;  // máx  5% de ajuste por idade
   const finishWeight   = 0.03;  // máx  3% de ajuste por finishing rate
+  const winRateWeight  = 0.06;  // máx  6% de ajuste por cartel
 
   let adjA = result.probImplA
     + (phys.total     * physWeight)
     + (styleFactor    * styleWeight)
     + (ageFactor      * ageWeight)
-    + (finishingFactor * finishWeight);
+    + (finishingFactor * finishWeight)
+    + (winRateFactor  * winRateWeight);
 
   // Clamp entre 2% e 98%
   adjA = Math.max(0.02, Math.min(0.98, adjA));
@@ -225,6 +289,8 @@ function analyzeFight(nameA, nameB, oddsA, oddsB, fighterA, fighterB, zebraStats
 
   result.probAdjA = adjA;
   result.probAdjB = adjB;
+  result.oddsEstA = +(1 / adjA).toFixed(2);
+  result.oddsEstB = +(1 / adjB).toFixed(2);
 
   // 7. EV ajustado
   result.evA = (adjA * (oddsA - 1)) - (1 - adjA);
@@ -243,11 +309,6 @@ function analyzeFight(nameA, nameB, oddsA, oddsB, fighterA, fighterB, zebraStats
   result.confidenceB = Math.round(Math.max(10, Math.min(90, confB)));
 
   // 9. Pick recomendado
-  // Sempre escolhe um lado: prioriza o lado com EV+ se houver; caso
-  // nenhum dos dois tenha valor (EV <= 0 nos dois), ainda assim
-  // recomenda o lado com maior probabilidade ajustada, mas marca
-  // `pickHasValue: false` para que a UI possa sinalizar "sem EV+"
-  // em vez de simplesmente não mostrar pick nenhum.
   if (result.evA >= result.evB) {
     result.pickRecommended = nameA;
     result.pickEV = result.evA;
@@ -258,6 +319,8 @@ function analyzeFight(nameA, nameB, oddsA, oddsB, fighterA, fighterB, zebraStats
     result.pickConf = result.confidenceB;
   }
   result.pickHasValue = result.pickEV > 0;
+  const pickIsA = result.pickRecommended === nameA;
+  result.predictedMethod = predictFinishMethod(pickIsA ? fighterA : fighterB, pickIsA ? adjA : adjB);
 
   // 10. Fator zebra
   const catA = getOddsCat(oddsA);

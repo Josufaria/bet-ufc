@@ -1,94 +1,143 @@
-const { fetchFighterPhysicalData } = require('./fighter-data-fetcher');
+const FIGHTERS_DB = require('./fighters-db-node');
+
+function normalizeName(name) {
+  return String(name || '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function lookupLocalFighter(name) {
+  const norm = normalizeName(name);
+  if (!norm) return {};
+  if (FIGHTERS_DB[norm]) return FIGHTERS_DB[norm];
+  const parts = norm.split(' ');
+  if (parts.length >= 2) {
+    const rev = `${parts[parts.length - 1]} ${parts.slice(0, -1).join(' ')}`;
+    if (FIGHTERS_DB[rev]) return FIGHTERS_DB[rev];
+  }
+  return {};
+}
+
+function americanToDecimal(ml) {
+  const n = Number(ml);
+  if (!Number.isFinite(n) || n === 0) return null;
+  if (n > 0) return +(1 + n / 100).toFixed(2);
+  return +(1 + 100 / Math.abs(n)).toFixed(2);
+}
+
+function parseRecordNums(recordStr) {
+  const m = String(recordStr || '').match(/(\d+)-(\d+)(?:-(\d+))?/);
+  if (!m) return { wins: 0, losses: 0, draws: 0 };
+  return { wins: Number(m[1]), losses: Number(m[2]), draws: Number(m[3] || 0) };
+}
+
+function formatDateYMD(date) {
+  const y = date.getUTCFullYear();
+  const m = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const d = String(date.getUTCDate()).padStart(2, '0');
+  return `${y}${m}${d}`;
+}
 
 module.exports = async function handler(req, res) {
-  try {
-    // Busca os dados da API pública da ESPN
-    const response = await fetch('https://site.api.espn.com/apis/site/v2/sports/mma/ufc/scoreboard');
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 3500);
 
+  try {
+    const now = new Date();
+    const start = new Date(now.getTime() - 21 * 86400000);
+    const end = new Date(now.getTime() + 90 * 86400000);
+    const url = `https://site.api.espn.com/apis/site/v2/sports/mma/ufc/scoreboard?dates=${formatDateYMD(start)}-${formatDateYMD(end)}`;
+
+    const response = await fetch(url, { signal: controller.signal });
     if (!response.ok) {
       throw new Error(`ESPN API Error: ${response.status}`);
     }
 
     const data = await response.json();
 
-    // Mapeia e filtra o JSON gigante da ESPN para o que realmente importa pro Bet UFC
-    const events = await Promise.all((data.events || []).map(async ev => {
-      const fights = await Promise.all((ev.competitions || []).map(async comp => {
-        // Busca as odds (se estiverem disponíveis) usando optional chaining rigoroso
-        const oddsDetails = comp.odds?.[0]?.details || 'Sem odds';
-        const oddsOverUnder = comp.odds?.[0]?.overUnder || null;
-        const odds = comp.odds ? { details: oddsDetails, overUnder: oddsOverUnder } : null;
+    const events = (data.events || []).map(ev => {
+      const fights = (ev.competitions || []).map((comp, idx) => {
+        const compOdds = comp.odds?.[0] || null;
+        const oddsDetails = compOdds?.details || 'Sem odds';
+        const oddsOverUnder = compOdds?.overUnder || null;
+        const homeMl = compOdds?.homeTeamOdds?.moneyLine;
+        const awayMl = compOdds?.awayTeamOdds?.moneyLine;
 
-        const fightersRaw = await Promise.allSettled((comp.competitors || []).map(async fighter => {
+        const fighters = (comp.competitors || []).map((fighter, fIdx) => {
           const athlete = fighter.athlete || {};
-          const photo = athlete.headshot?.href || `https://a.espncdn.com/combiner/i?img=/i/headshots/mma/players/full/${fighter.id}.png`;
+          const fullName = athlete.displayName || athlete.fullName || 'Unknown';
+          const local = lookupLocalFighter(fullName);
+          const photo = athlete.headshot?.href ||
+            (fighter.id ? `https://a.espncdn.com/combiner/i?img=/i/headshots/mma/players/full/${fighter.id}.png` : '');
 
-          // Dados físicos avançados agora vêm do módulo compartilhado,
-          // que já tem cache de 7 dias por lutador. Na prática, isso
-          // significa que a grande maioria das chamadas aqui nem chega
-          // a bater na ESPN de novo — só lê do cache em memória.
-          const physical = await fetchFighterPhysicalData(fighter.id);
+          const record = fighter.records?.[0]?.summary || (local.wins ? `${local.wins}-${local.losses}-${local.draws || 0}` : '0-0-0');
+          const recNums = parseRecordNums(record);
 
-          let record = '0-0-0';
-          if (fighter.records && fighter.records.length > 0) {
-            record = fighter.records[0].summary || record;
-          }
+          let decOdd = null;
+          if (fIdx === 0 && homeMl != null) decOdd = americanToDecimal(homeMl);
+          else if (fIdx === 1 && awayMl != null) decOdd = americanToDecimal(awayMl);
 
           return {
             id: fighter.id,
-            name: athlete.displayName || athlete.fullName || 'Unknown',
-            shortName: athlete.shortName,
-            photo: photo,
-            record: record,
-            winner: fighter.winner || false,
+            name: fullName,
+            shortName: athlete.shortName || fullName,
+            photo,
+            record,
+            winner: Boolean(fighter.winner),
             corner: fighter.order === 1 ? 'red' : 'blue',
-
-            // Dados Físicos Avançados Incorporados (vindos do cache compartilhado)
-            height_cm: physical.height_cm,
-            reach_cm: physical.reach_cm,
-            stance: physical.stance,
-            wins: physical.wins,
-            losses: physical.losses,
-            draws: physical.draws
+            odd: decOdd,
+            height_cm: Number(local.height_cm) || 0,
+            reach_cm: Number(local.reach_cm) || 0,
+            stance: local.stance || '',
+            style: local.style || 'MMA',
+            age: Number(local.age) || 0,
+            wins: recNums.wins || Number(local.wins) || 0,
+            losses: recNums.losses || Number(local.losses) || 0,
+            draws: recNums.draws || Number(local.draws) || 0
           };
-        }));
-
-        const resolvedFighters = fightersRaw.map(r => {
-          if (r.status === 'fulfilled') return r.value;
-          return { id: null, name: 'Erro', photo: null, record: 'N/A' };
         });
 
+        const statusState = comp.status?.type?.state || 'pre';
+        const completed = Boolean(comp.status?.type?.completed) || statusState === 'post';
+        const methodText = comp.details?.[0]?.type?.text || comp.status?.type?.shortDetail || '';
+
         return {
-          id: comp.id,
-          date: comp.date,
-          status: comp.status?.type?.state || 'pre', // 'pre', 'in', 'post'
-          odds: odds,
-          weightClass: comp.type?.abbreviation || 'Catchweight',
-          fighters: resolvedFighters
+          id: comp.id || `${ev.id}-${idx}`,
+          date: comp.date || ev.date,
+          status: statusState,
+          completed,
+          method: completed ? methodText : '',
+          cardSegment: comp.cardSegment?.description || (idx === 0 ? 'Main Event' : ''),
+          odds: compOdds ? {
+            details: oddsDetails,
+            overUnder: oddsOverUnder,
+            oddA: fighters[0]?.odd || null,
+            oddB: fighters[1]?.odd || null
+          } : null,
+          weightClass: comp.type?.abbreviation || comp.type?.text || 'Catchweight',
+          fighters
         };
-      }));
+      });
 
       return {
         id: ev.id,
         name: ev.name,
         shortName: ev.shortName,
         date: ev.date,
-        fights: fights
+        completed: Boolean(ev.status?.type?.completed),
+        fights
       };
-    }));
+    });
 
-    // ESTRATÉGIA DE CACHE VERCEL (ISR / SWR)
-    // s-maxage=21600 (6h) -> os dados físicos dos lutadores quase nunca
-    //   mudam de um dia pro outro, e agora também temos cache por lutador
-    //   de 7 dias no módulo compartilhado, então é seguro esticar isso.
-    // stale-while-revalidate=86400 -> serve cache "velho" por até 24h
-    //   enquanto revalida em background, garantindo resposta sempre rápida.
-    res.setHeader('Cache-Control', 's-maxage=21600, stale-while-revalidate=86400');
-
-    // Retorna o JSON otimizado
+    res.setHeader('Cache-Control', 's-maxage=3600, stale-while-revalidate=21600');
     res.status(200).json({ success: true, count: events.length, events });
   } catch (error) {
-    console.error("ESPN Fetch Error:", error);
-    res.status(500).json({ success: false, message: error.message });
+    console.error('ESPN Fetch Error:', error);
+    res.status(error.name === 'AbortError' ? 504 : 500).json({ success: false, message: error.message });
+  } finally {
+    clearTimeout(timer);
   }
 };

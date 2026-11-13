@@ -7,7 +7,7 @@
   <meta name="description" content="Análise profissional de lutas UFC com probabilidades ajustadas por altura, envergadura, estilo de luta e detector de zebras. Picks EV+ com dados históricos reais.">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🥊</text></svg>">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css?v=5">
+  <link rel="stylesheet" href="css/style.css?v=6">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 </head>
 <body>
@@ -22,6 +22,7 @@
       UFC Bet Analyzer
     </a>
     <div class="nav-right">
+      <span id="sync-status-pill" class="sync-pill sync-local">⚡ Base Local</span>
       <span class="nav-badge">EV+ PRO</span>
     </div>
   </nav>
@@ -115,9 +116,24 @@
         <span class="section-icon">⚡</span>
         <div>
           <div class="section-title">Cards de Luta — Análise PunterMMA</div>
-          <div class="section-sub">Odds, vantagem física e probabilidade ajustada. Clique no ✏️ para editar ou cadastrar as medidas de um lutador.</div>
+          <div class="section-sub">Odds, vantagem física e probabilidade ajustada. Clique no ✏️ para editar medidas ou em "Palpitar" para montar sua múltipla.</div>
         </div>
       </div>
+
+      <div id="cards-toolbar" class="cards-toolbar">
+        <div class="cards-search-wrap">
+          <span class="cards-search-icon">🔍</span>
+          <input type="search" id="card-search-input" placeholder="Buscar lutador ou categoria no card…" autocomplete="off" />
+        </div>
+        <div class="qf-group">
+          <button type="button" class="qf-btn active" data-qf="all">Todas <span class="qf-count">0</span></button>
+          <button type="button" class="qf-btn" data-qf="ev">EV+ 🔥 <span class="qf-count">0</span></button>
+          <button type="button" class="qf-btn" data-qf="zebra">Zebras 🦓 <span class="qf-count">0</span></button>
+          <button type="button" class="qf-btn" data-qf="ticket">Meus Palpites 🎟️ <span class="qf-count">0</span></button>
+        </div>
+      </div>
+
+      <div id="my-ticket-bar" style="display:none"></div>
       <div id="fight-cards-container"></div>
     </div>
 
@@ -383,10 +399,11 @@
 <!-- ══════════════════════════════════════════
      SCRIPTS (ordem importa!)
      ══════════════════════════════════════════ -->
-<script src="js/fighters-db.js?v=5"></script>
-<script src="js/analyzer.js?v=5"></script>
-<script src="js/ai-integration.js?v=5"></script>
-<script src="js/app.js?v=5"></script>
+<script src="js/fighters-db.js?v=6"></script>
+<script src="js/events-db.js?v=6"></script>
+<script src="js/analyzer.js?v=6"></script>
+<script src="js/ai-integration.js?v=6"></script>
+<script src="js/app.js?v=6"></script>
 
 </body>
 </html>
