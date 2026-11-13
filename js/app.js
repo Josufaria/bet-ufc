@@ -1610,10 +1610,44 @@ function renderMyTicketBar() {
   `;
 }
 
+let _showAllCardFights = false;
+let _lastRenderedEventName = null;
+
+function togglePrelimFights() {
+  _showAllCardFights = !_showAllCardFights;
+  document.querySelectorAll('.tale-card.prelim-collapsible').forEach(el => {
+    el.classList.toggle('prelim-hidden', !_showAllCardFights);
+  });
+  const btn = document.querySelector('.btn-toggle-prelims');
+  if (btn) {
+    const count = parseInt(btn.dataset.prelimCount || '0', 10);
+    btn.innerHTML = _showAllCardFights
+      ? `🔼 Ocultar Card Preliminar`
+      : `🔽 Ver Card Preliminar Completo (+${count} ${count === 1 ? 'luta' : 'lutas'})`;
+    btn.setAttribute('aria-expanded', _showAllCardFights ? 'true' : 'false');
+  }
+}
+
+function toggleSectionCollapse(secId, btn) {
+  const sec = document.getElementById(secId);
+  if (!sec) return;
+  const isNowExpanded = sec.classList.toggle('section-expanded-mobile');
+  const collapsed = !isNowExpanded;
+  sec.classList.toggle('section-collapsed-mobile', collapsed);
+  if (btn) {
+    btn.textContent = collapsed ? 'Expandir 🔽' : 'Recolher 🔼';
+    btn.setAttribute('aria-expanded', isNowExpanded ? 'true' : 'false');
+  }
+}
+
 function renderEvento() {
   const sel = document.getElementById('evento-sel');
   if (!sel) return;
   const nome = sel.value;
+  if (_lastRenderedEventName !== nome) {
+    _lastRenderedEventName = nome;
+    _showAllCardFights = false;
+  }
   const ev = _eventos.find(e => e.nome === nome);
   const cardEl = document.getElementById('fight-cards-container');
 
@@ -1690,8 +1724,23 @@ function renderEvento() {
 
   // SEÇÃO PRINCIPAL: FIGHT CARDS com análise física
   if (filtered.length) {
-    const cards = filtered.map(item => buildFightCard(item.c, ev, item.idx, item.analysis, item.dbA, item.dbB));
-    cardEl.innerHTML = `<div class="fight-cards-grid">${cards.join('')}</div>`;
+    const canCollapsePrelims = _cardFilter.quick === 'all' && !_cardFilter.search && filtered.length > 6;
+    const prelimCount = canCollapsePrelims ? filtered.length - 6 : 0;
+    const cards = filtered.map((item, pos) => {
+      const html = buildFightCard(item.c, ev, item.idx, item.analysis, item.dbA, item.dbB);
+      if (canCollapsePrelims && pos >= 6) {
+        return html.replace('class="tale-card ', `class="tale-card prelim-collapsible${_showAllCardFights ? '' : ' prelim-hidden'} `);
+      }
+      return html;
+    });
+    const toggleBtnHtml = canCollapsePrelims
+      ? `<div class="prelim-toggle-wrap">
+          <button type="button" class="btn-toggle-prelims" data-prelim-count="${prelimCount}" aria-expanded="${_showAllCardFights ? 'true' : 'false'}" onclick="togglePrelimFights()">
+            ${_showAllCardFights ? '🔼 Ocultar Card Preliminar' : `🔽 Ver Card Preliminar Completo (+${prelimCount} ${prelimCount === 1 ? 'luta' : 'lutas'})`}
+          </button>
+        </div>`
+      : '';
+    cardEl.innerHTML = `<div class="fight-cards-grid">${cards.join('')}</div>${toggleBtnHtml}`;
   } else if (totalFights > 0) {
     cardEl.innerHTML = '<div class="empty"><div class="empty-icon">🔍</div>Nenhuma luta corresponde ao filtro atual.</div>';
   } else {
@@ -1772,8 +1821,8 @@ function buildFightCard(c, ev, idx, preAnalysis = null, preDbA = null, preDbB = 
   const { fV, oV, fA, oA } = c;
   if (!fV && !fA) return '';
 
-  const editIconV = fV ? `<button type="button" class="fc-edit-btn" data-fighter="${escHtml(fV)}" title="Editar dados físicos de ${escHtml(fV)}">✏️</button>` : '';
-  const editIconA = fA ? `<button type="button" class="fc-edit-btn" data-fighter="${escHtml(fA)}" title="Editar dados físicos de ${escHtml(fA)}">✏️</button>` : '';
+  const histBtnV = fV ? `<button type="button" class="fc-hist-btn fc-edit-btn" data-fighter="${escHtml(fV)}" title="Ver histórico e ficha técnica de ${escHtml(fV)}">📜 Histórico</button>` : '';
+  const histBtnA = fA ? `<button type="button" class="fc-hist-btn fc-edit-btn" data-fighter="${escHtml(fA)}" title="Ver histórico e ficha técnica de ${escHtml(fA)}">📜 Histórico</button>` : '';
 
   let dbA = preDbA || (typeof getFighterData === 'function' ? getFighterData(fV) : null);
   let dbB = preDbB || (typeof getFighterData === 'function' ? getFighterData(fA) : null);
@@ -1813,7 +1862,8 @@ function buildFightCard(c, ev, idx, preAnalysis = null, preDbA = null, preDbB = 
 
   const renderPhoto = (url, name) => {
     const finalUrl = (url && url !== 'null' && url !== 'undefined') ? url : defaultPhoto;
-    return `<div class="tale-photo-wrap"><img src="${finalUrl}" class="tale-photo" loading="lazy" decoding="async" onerror="if(this.src !== '${defaultPhoto}'){ this.onerror=null; this.src='${defaultPhoto}'; }" alt="${escHtml(name || 'Lutador')}" /></div>`;
+    const fAttr = name ? `data-fighter="${escHtml(name)}" title="Ver histórico de ${escHtml(name)}"` : '';
+    return `<div class="tale-photo-wrap" ${fAttr}><img src="${finalUrl}" class="tale-photo" loading="lazy" decoding="async" onerror="if(this.src !== '${defaultPhoto}'){ this.onerror=null; this.src='${defaultPhoto}'; }" alt="${escHtml(name || 'Lutador')}" /></div>`;
   };
 
   // Formatadores seguros (nunca geram NaNm)
@@ -1940,10 +1990,13 @@ function buildFightCard(c, ev, idx, preAnalysis = null, preDbA = null, preDbB = 
       <div class="tale-body">
         <div class="tale-fighter left ${isWinV ? 'winner' : ''} ${myPick === fV ? 'user-picked' : ''}">
           ${renderPhoto(photoV, fV)}
-          <div class="tale-name">${escHtml(fV || '—')} ${editIconV}</div>
+          <div class="tale-name fc-fighter-trigger" ${fV ? `data-fighter="${escHtml(fV)}" title="Ver histórico de ${escHtml(fV)}"` : ''}>${escHtml(fV || '—')}</div>
           ${styleVTag}
           ${oddsVHtml}
-          ${selBtnV}
+          <div class="tale-fighter-actions">
+            ${selBtnV}
+            ${histBtnV}
+          </div>
         </div>
 
         <div class="tale-center">
@@ -1971,10 +2024,13 @@ function buildFightCard(c, ev, idx, preAnalysis = null, preDbA = null, preDbB = 
 
         <div class="tale-fighter right ${isWinA ? 'winner' : ''} ${myPick === fA ? 'user-picked' : ''}">
           ${renderPhoto(photoA, fA)}
-          <div class="tale-name">${escHtml(fA || '—')} ${editIconA}</div>
+          <div class="tale-name fc-fighter-trigger" ${fA ? `data-fighter="${escHtml(fA)}" title="Ver histórico de ${escHtml(fA)}"` : ''}>${escHtml(fA || '—')}</div>
           ${styleATag}
           ${oddsAHtml}
-          ${selBtnA}
+          <div class="tale-fighter-actions">
+            ${selBtnA}
+            ${histBtnA}
+          </div>
         </div>
       </div>
 
@@ -2500,8 +2556,8 @@ function updateStakesCalculator() {
   `;
 }
 
-// ── BANCO DINÂMICO DE LUTADORES (MODAL & SALVAMENTO) ─────────────
-let _currentEditingFighter = null;
+// ── FICHA TÉCNICA E HISTÓRICO DO LUTADOR (SOMENTE LEITURA) ─────────────
+let _currentViewingFighter = null;
 
 function renderFighterProfileSummary(name, data) {
   const sumEl = document.getElementById('fighter-profile-summary');
@@ -2515,6 +2571,11 @@ function renderFighterProfileSummary(name, data) {
     ? `${data.wins}-${data.losses}${data.draws ? '-' + data.draws : ''}`
     : '—';
   const styleTxt = (data && data.style) || 'MMA';
+  const stanceTxt = (data && data.stance) || '—';
+  const hNum = parseFloat(data?.height_cm);
+  const rNum = parseFloat(data?.reach_cm);
+  const heightTxt = Number.isFinite(hNum) && hNum > 50 ? `${Math.round(hNum)} cm (${(hNum / 100).toFixed(2)}m)` : '—';
+  const reachTxt = Number.isFinite(rNum) && rNum > 50 ? `${Math.round(rNum)} cm` : '—';
   const koSubTxt = (data && (data.ko_wins || data.sub_wins))
     ? `${data.ko_wins || 0} KO · ${data.sub_wins || 0} SUB`
     : '—';
@@ -2532,39 +2593,50 @@ function renderFighterProfileSummary(name, data) {
       const myOdd = isV ? c.oV : c.oA;
       const lutaRes = findLuta(ev, name);
       let statusBadge = '<span style="color:var(--gold)">⏳ Agendada</span>';
+      let methodTxt = '';
       if (!ev.isFuturo && lutaRes && lutaRes.resultado) {
         const resNorm = normOddName(lutaRes.resultado);
         const won = resNorm === norm || (lastTok.length > 3 && resNorm.includes(lastTok));
         statusBadge = won
           ? '<span style="color:var(--green);font-weight:700">✅ Vitória</span>'
           : '<span style="color:var(--red);font-weight:700">❌ Derrota</span>';
+        methodTxt = lutaRes.metodo ? ` · ${lutaRes.metodo}` : '';
       }
       fights.push({
         evento: ev.nome,
         data: ev.dataEvento || '',
+        ms: parseBrDateMs(ev.dataEvento),
         opp,
         odd: myOdd ? `@${Number(myOdd).toFixed(2)}` : '',
+        methodTxt,
         statusBadge
       });
     }
   }
+  fights.sort((a, b) => b.ms - a.ms);
 
   const historyHtml = fights.length
-    ? fights.slice(0, 8).map(f => `
+    ? fights.slice(0, 12).map(f => `
         <div class="fp-fight-row">
-          <span><strong>vs ${escHtml(f.opp)}</strong> <small style="color:var(--text3)">(${escHtml(f.evento)}${f.data ? ' · ' + escHtml(f.data) : ''})</small></span>
-          <span>${f.odd ? `<small style="color:var(--cyan);margin-right:6px">${f.odd}</small>` : ''}${f.statusBadge}</span>
+          <div class="fp-fight-info">
+            <strong>vs ${escHtml(f.opp)}</strong>
+            <small>${escHtml(f.evento)}${f.data ? ' · ' + escHtml(f.data) : ''}${escHtml(f.methodTxt)}</small>
+          </div>
+          <div class="fp-fight-res">${f.odd ? `<small class="fp-fight-odd">${f.odd}</small>` : ''}${f.statusBadge}</div>
         </div>
       `).join('')
-    : '<div style="font-size:12px;color:var(--text3)">Sem lutas registradas nos 121 cards da base.</div>';
+    : '<div style="font-size:12px;color:var(--text3)">Sem lutas registradas nos cards da base.</div>';
 
   sumEl.innerHTML = `
     <div class="fp-kpis">
+      <div class="fp-kpi"><span>Cartel</span><strong>${escHtml(rec)}</strong></div>
       <div class="fp-kpi"><span>Rating Elo</span><strong style="color:var(--cyan)">${elo}</strong></div>
       <div class="fp-kpi"><span>Sequência</span><strong>${streakTxt}</strong></div>
-      <div class="fp-kpi"><span>Cartel</span><strong>${escHtml(rec)}</strong></div>
-      <div class="fp-kpi"><span>Estilo</span><strong>${escHtml(styleTxt)}</strong></div>
       <div class="fp-kpi"><span>Via Rápida</span><strong>${escHtml(koSubTxt)}</strong></div>
+      <div class="fp-kpi"><span>Altura</span><strong>${escHtml(heightTxt)}</strong></div>
+      <div class="fp-kpi"><span>Envergadura</span><strong>${escHtml(reachTxt)}</strong></div>
+      <div class="fp-kpi"><span>Guarda (Stance)</span><strong>${escHtml(stanceTxt)}</strong></div>
+      <div class="fp-kpi"><span>Estilo Principal</span><strong style="color:var(--gold)">${escHtml(styleTxt)}</strong></div>
     </div>
     <div class="fp-history-title">📜 Histórico no UFC (${fights.length} ${fights.length === 1 ? 'luta encontrada' : 'lutas encontradas'})</div>
     <div class="fp-history-list">${historyHtml}</div>
@@ -2631,30 +2703,16 @@ function searchGlobalFighters(query) {
 }
 
 function openFighterModal(name) {
-  _currentEditingFighter = name;
+  _currentViewingFighter = name;
   const drop = document.getElementById('global-fighter-dropdown');
   if (drop) drop.style.display = 'none';
   const nameInput = document.getElementById('fighter-name');
   if (nameInput) nameInput.value = name;
+  const titleEl = document.getElementById('fighter-modal-name-title');
+  if (titleEl) titleEl.textContent = name;
 
   const data = getFighterData(name);
   renderFighterProfileSummary(name, data);
-  const hInput = document.getElementById('fighter-height');
-  const rInput = document.getElementById('fighter-reach');
-  const stInput = document.getElementById('fighter-stance');
-  const syInput = document.getElementById('fighter-style');
-
-  if (data) {
-    if (hInput) hInput.value = data.height_cm || '';
-    if (rInput) rInput.value = data.reach_cm || '';
-    if (stInput) stInput.value = data.stance || 'Orthodox';
-    if (syInput) syInput.value = data.style || 'All-Round';
-  } else {
-    if (hInput) hInput.value = '';
-    if (rInput) rInput.value = '';
-    if (stInput) stInput.value = 'Orthodox';
-    if (syInput) syInput.value = 'All-Round';
-  }
 
   const modal = document.getElementById('fighter-modal');
   if (modal) modal.classList.add('active');
@@ -2663,38 +2721,7 @@ function openFighterModal(name) {
 function closeFighterModal() {
   const modal = document.getElementById('fighter-modal');
   if (modal) modal.classList.remove('active');
-  _currentEditingFighter = null;
-}
-
-function saveFighterStats() {
-  if (!_currentEditingFighter) return;
-
-  const hRaw = document.getElementById('fighter-height').value;
-  const rRaw = document.getElementById('fighter-reach').value;
-  const hVal = hRaw ? parseFloat(hRaw) : null;
-  const rVal = rRaw ? parseFloat(rRaw) : null;
-  const stanceVal = document.getElementById('fighter-stance').value;
-  const styleVal = document.getElementById('fighter-style').value;
-
-  if ((hVal !== null && (isNaN(hVal) || hVal < 100)) || (rVal !== null && (isNaN(rVal) || rVal < 100))) {
-    alert('Se preencher altura ou envergadura, insira valores válidos (mínimo de 100 cm).');
-    return;
-  }
-
-  const prev = getFighterData(_currentEditingFighter) || {};
-  saveCustomFighter(_currentEditingFighter, {
-    ...prev,
-    ...(hVal ? { height_cm: hVal } : {}),
-    ...(rVal ? { reach_cm: rVal } : {}),
-    stance: stanceVal,
-    style: styleVal
-  });
-
-  if (styleVal) _lutadores[_currentEditingFighter.toLowerCase()] = styleVal;
-  closeFighterModal();
-  ensureAllEventsAnalyzed();
-  renderEvento();
-  renderAll();
+  _currentViewingFighter = null;
 }
 
 // ── INIT ────────────────────────────────────────────────────────
@@ -2733,9 +2760,9 @@ document.addEventListener('click', e => {
     drop.style.display = 'none';
   }
 
-  const editBtn = e.target.closest('.fc-edit-btn');
-  if (editBtn) {
-    openFighterModal(editBtn.dataset.fighter);
+  const fighterBtn = e.target.closest('.fc-hist-btn, .fc-edit-btn, .fc-fighter-trigger, .tale-photo-wrap[data-fighter]');
+  if (fighterBtn && fighterBtn.dataset.fighter) {
+    openFighterModal(fighterBtn.dataset.fighter);
     return;
   }
 
