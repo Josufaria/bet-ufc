@@ -461,19 +461,51 @@ function normOddName(s) {
     .trim();
 }
 
+function getSavedOddsApiKey() {
+  try { return (localStorage.getItem('ufc_odds_api_key') || '').trim(); } catch (e) { return ''; }
+}
+
+function updateOddsApiBtnState() {
+  const btn = document.getElementById('odds-api-cfg-btn');
+  if (!btn) return;
+  const hasKey = Boolean(getSavedOddsApiKey());
+  btn.textContent = hasKey ? '🔑 Odds API ✓' : '🔑 Odds API';
+  btn.className = `sync-pill ${hasKey ? 'sync-ok' : 'sync-local'}`;
+}
+
+function configureOddsApiKey() {
+  const current = getSavedOddsApiKey();
+  const input = typeof prompt === 'function'
+    ? prompt('Cole sua API Key gratuita da The Odds API (the-odds-api.com) ou deixe em branco para usar apenas ESPN Bet + Polymarket gratuitos:', current)
+    : null;
+  if (input === null) return;
+  const clean = String(input || '').trim();
+  try {
+    if (clean) localStorage.setItem('ufc_odds_api_key', clean);
+    else localStorage.removeItem('ufc_odds_api_key');
+  } catch (e) {}
+  updateOddsApiBtnState();
+  syncLiveOddsInBackground();
+}
+
 async function syncLiveOddsInBackground() {
   const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), 3000);
+  const t = setTimeout(() => ctrl.abort(), 3500);
   try {
-    const r = await fetch('/api/get-mma-odds', { signal: ctrl.signal });
+    const savedKey = getSavedOddsApiKey();
+    const fetchOpts = { signal: ctrl.signal };
+    if (savedKey) fetchOpts.headers = { 'x-odds-api-key': savedKey };
+    const r = await fetch('/api/get-mma-odds', fetchOpts);
     const ct = r.headers.get('content-type') || '';
     if (!r.ok || !ct.includes('application/json')) return;
     const json = await r.json();
     if (!json.success || !Array.isArray(json.matchups) || json.matchups.length === 0) return;
 
     let changed = 0;
+    let hasMetadataUpdate = false;
     const futureEvents = _eventos.filter(e => e.isFuturo);
     for (const ev of futureEvents) {
+      let evUpdated = false;
       for (const c of (ev.cardLutas || [])) {
         const nV = normOddName(c.fV);
         const nA = normOddName(c.fA);
@@ -490,6 +522,10 @@ async function syncLiveOddsInBackground() {
         const direct = normOddName(match.fighterA) === nV || normOddName(match.fighterA).endsWith(lV);
         const newOV = direct ? match.oddA : match.oddB;
         const newOA = direct ? match.oddB : match.oddA;
+        const newBestV = direct ? match.bestOddA : match.bestOddB;
+        const newBestA = direct ? match.bestOddB : match.bestOddA;
+        const newBookV = direct ? match.bestBookA : match.bestBookB;
+        const newBookA = direct ? match.bestBookB : match.bestBookA;
         const newOpenV = direct ? match.openOddA : match.openOddB;
         const newOpenA = direct ? match.openOddB : match.openOddA;
 
@@ -497,22 +533,31 @@ async function syncLiveOddsInBackground() {
           c.oV = newOV;
           ev.oddCard[c.fV.toLowerCase()] = newOV;
           changed++;
+          evUpdated = true;
         }
         if (newOA && newOA > 1.01 && (!c.oA || Math.abs(c.oA - newOA) >= 0.02)) {
           c.oA = newOA;
           ev.oddCard[c.fA.toLowerCase()] = newOA;
           changed++;
+          evUpdated = true;
         }
+        if (newBestV) c.bestOV = newBestV;
+        if (newBestA) c.bestOA = newBestA;
+        if (newBookV) c.bestBookV = newBookV;
+        if (newBookA) c.bestBookA = newBookA;
         if (newOpenV) c.openOV = newOpenV;
         if (newOpenA) c.openOA = newOpenA;
+        if (match.bookmakers) c.booksCount = match.bookmakers;
+        if (Array.isArray(match.providers)) c.oddsProviders = match.providers;
+        hasMetadataUpdate = true;
       }
-      if (changed > 0) ev.punterAnalise = [];
+      if (evUpdated) ev.punterAnalise = [];
     }
 
-    if (changed > 0) {
-      ensureAllEventsAnalyzed();
+    if (changed > 0 || hasMetadataUpdate) {
+      if (changed > 0) ensureAllEventsAnalyzed();
       renderEvento();
-      setSyncStatus(`🟢 ESPN + Odds (${json.source})`, 'ok');
+      setSyncStatus(`🟢 Odds agregadas (${json.source})`, 'ok');
     }
   } catch (e) {
     // falha silenciosa: base local / ESPN segue ativa
@@ -1800,22 +1845,31 @@ function buildFightCard(c, ev, idx, preAnalysis = null, preDbA = null, preDbB = 
   const eloCtx = getFighterEloCtx(fV, fA, c);
   const analysis = preAnalysis || (typeof analyzeFight === 'function' ? analyzeFight(fV, fA, oV, oA, dbA, dbB, _zebraStats, eloCtx) : null);
 
-  // Odds formatting (reais ou estimadas)
-  const renderOdds = (oddNum, estOdd, espnOddStr) => {
+  // Odds formatting (reais, agregadas ou estimadas)
+  const renderOdds = (oddNum, estOdd, espnOddStr, bestOdd, bestBook, openOdd) => {
+    let mainHtml = '';
     if (oddNum && oddNum > 1) {
       const isFav = oddNum < 1.65;
-      return `<div class="tale-odds ${isFav ? 'fav' : ''}">${Number(oddNum).toFixed(2)}</div>`;
+      mainHtml = `<div class="tale-odds ${isFav ? 'fav' : ''}">${Number(oddNum).toFixed(2)}</div>`;
+    } else if (espnOddStr && espnOddStr !== 'Sem odds') {
+      mainHtml = `<div class="tale-odds est">${escHtml(espnOddStr)}</div>`;
+    } else if (estOdd) {
+      mainHtml = `<div class="tale-odds est" title="Odd justa estimada pelo modelo">Est. ${Number(estOdd).toFixed(2)}</div>`;
     }
-    if (espnOddStr && espnOddStr !== 'Sem odds') {
-      return `<div class="tale-odds est">${escHtml(espnOddStr)}</div>`;
+    if (!mainHtml) return '';
+
+    const subParts = [];
+    if (bestOdd && oddNum && bestOdd > oddNum + 0.01) {
+      subParts.push(`📈 Pico ${Number(bestOdd).toFixed(2)}${bestBook ? ' (' + escHtml(bestBook) + ')' : ''}`);
     }
-    if (estOdd) {
-      return `<div class="tale-odds est" title="Odd justa estimada pelo modelo">Est. ${Number(estOdd).toFixed(2)}</div>`;
+    if (openOdd && openOdd > 1) {
+      subParts.push(`Abriu ${Number(openOdd).toFixed(2)}`);
     }
-    return '';
+    const subHtml = subParts.length ? `<div class="tale-odds-sub">${subParts.join(' · ')}</div>` : '';
+    return mainHtml + subHtml;
   };
-  const oddsVHtml = renderOdds(oV, analysis?.oddsEstA, c.espnOdds);
-  const oddsAHtml = renderOdds(oA, analysis?.oddsEstB, c.espnOdds);
+  const oddsVHtml = renderOdds(oV, analysis?.oddsEstA, c.espnOdds, c.bestOV, c.bestBookV, c.openOV);
+  const oddsAHtml = renderOdds(oA, analysis?.oddsEstB, c.espnOdds, c.bestOA, c.bestBookA, c.openOA);
 
   // Resultado
   const luta = findLuta(ev, fV || fA);
@@ -1829,13 +1883,17 @@ function buildFightCard(c, ev, idx, preAnalysis = null, preDbA = null, preDbB = 
   const pV = analysis?.probAdjA ? Math.round(analysis.probAdjA * 100) : 50;
   const pA = 100 - pV;
 
-  // Badges (EV+, Zebra, Pick, Resultado)
+  // Badges (EV+, Zebra, Pick, Resultado, Fontes Agregadas)
   let badges = '';
   if (analysis) {
     if (analysis.evA > 0.03) badges += `<span class="badge badge-ev-p">EV+ ${escHtml(fV?.split(' ').pop() || '')} (+${(analysis.evA * 100).toFixed(1)}%)</span>`;
     if (analysis.evB > 0.03) badges += `<span class="badge badge-ev-p">EV+ ${escHtml(fA?.split(' ').pop() || '')} (+${(analysis.evB * 100).toFixed(1)}%)</span>`;
     if (analysis.zebraAlert) badges += `<span class="badge badge-zebra">🦓 ALERTA ZEBRA</span>`;
     if (analysis.predictedMethod) badges += `<span class="badge badge-method">🥊 ${escHtml(analysis.predictedMethod)}</span>`;
+  }
+  if (c.booksCount && c.booksCount > 1) {
+    const tip = Array.isArray(c.oddsProviders) ? c.oddsProviders.join(', ') : '';
+    badges += `<span class="badge badge-lock" title="${escHtml(tip)}">📊 ${c.booksCount} fontes</span>`;
   }
   if (resultado) {
     badges += `<span class="badge badge-win">✅ Venceu: ${escHtml(resultado)}${luta?.metodo ? ' (' + escHtml(luta.metodo) + ')' : ''}</span>`;
@@ -2658,6 +2716,7 @@ document.addEventListener('DOMContentLoaded', () => {
     globalSearchEl.addEventListener('input', e => searchGlobalFighters(e.target.value));
   }
 
+  updateOddsApiBtnState();
   loadData();
 });
 

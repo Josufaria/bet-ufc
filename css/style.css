@@ -2169,3 +2169,9 @@ footer a:hover { text-decoration: underline; }
   gap: 12px;
   margin-bottom: 16px;
 }
+.tale-odds-sub {
+  margin-top: 3px;
+  font-size: 10px;
+  color: var(--text3);
+  line-height: 1.2;
+}
