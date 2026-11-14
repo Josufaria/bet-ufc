@@ -92,14 +92,110 @@ window._processEspnQueue = async function() {
 // Charts
 let _roiChart = null, _compareChart = null, _styleChart = null;
 
+// ── NORMALIZAÇÃO E MATCHING DE LUTADORES / RESULTADOS ────────────
+function normOddName(s) {
+  return String(s || '')
+    .replace(/\s*\((?:c|ic)\)\s*/gi, ' ')
+    .replace(/[łŁ]/g, 'l')
+    .replace(/[đĐ]/g, 'd')
+    .replace(/[øØ]/g, 'o')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s'-]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+const FIGHTER_ALIASES = {
+  "abdul rakhman yakhyaev": "abdul-rakhman yakhyaev",
+  "abus magomedov": "abusupiyan magomedov",
+  "patricio pitbull": "patricio freire",
+  "patricio pitbull freire": "patricio freire",
+  "shara magomedov": "sharabutdin magomedov",
+  "shara bullet": "sharabutdin magomedov",
+  "bia mesquita": "beatriz mesquita",
+  "lupita godinez": "loopy godinez",
+  "king green": "bobby green",
+  "sumudaerji": "su mudaerji",
+  "aoriqileng": "aori qileng",
+  "rong zhu": "rongzhu",
+  "sergey spivak": "serghei spivac",
+  "serghei spivak": "serghei spivac",
+  "chepe mariscal": "jose mariscal",
+  "khalil rountree": "khalil rountree jr",
+  "khalil rountree jr.": "khalil rountree jr",
+  "raul rosas jr.": "raul rosas jr",
+  "michael aswell jr.": "michael aswell",
+  "michael aswell jr": "michael aswell",
+  "baisangur susurkaev": "baisangur susurkajev",
+  "eduardo chapolin": "eduardo henrique",
+  "marcus buchecha": "marcus almeida",
+  "ian garry": "ian machado garry",
+  "islam mackachev": "islam makhachev"
+};
+
+function canonName(s) {
+  const n = normOddName(s);
+  return FIGHTER_ALIASES[n] || n;
+}
+
+function sameFighter(a, b, allowLastToken = false) {
+  if (!a || !b) return false;
+  const na = canonName(a);
+  const nb = canonName(b);
+  if (!na || !nb) return false;
+  const naSp = na.replace(/-/g, ' ');
+  const nbSp = nb.replace(/-/g, ' ');
+  if (na === nb || naSp === nbSp) return true;
+
+  const ta = naSp.split(' ').filter(Boolean);
+  const tb = nbSp.split(' ').filter(Boolean);
+  if (ta.length >= 2 && tb.length >= 2 && (ta.every(t => tb.includes(t)) || tb.every(t => ta.includes(t)))) {
+    return true;
+  }
+  if (allowLastToken) {
+    const lastA = ta[ta.length - 1] || '';
+    const lastB = tb[tb.length - 1] || '';
+    if (lastA.length > 2 && lastA === lastB && (ta.length === 1 || tb.length === 1)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function isDrawOrNC(luta) {
+  if (!luta) return false;
+  const res = normOddName(luta.resultado || '');
+  const met = normOddName(luta.metReal || luta.metodo || '');
+  return res === 'empate' || res === 'draw' || res === 'nc' || res === 'no contest' || res === 'sem contest'
+    || met === 'empate' || met === 'draw' || met === 'nc' || met === 'no contest' || met === 'sem contest'
+    || (met === 'outro' && res === 'empate');
+}
+
+function getBoutFighters(lutaStr) {
+  const p = String(lutaStr || '').split(/\s+vs\.?\s+/i);
+  return [p[0]?.trim() || '', p[1]?.trim() || ''];
+}
+
+function didFighterWin(luta, fighterName) {
+  if (!luta || !luta.resultado || isDrawOrNC(luta)) return false;
+  const [f1, f2] = getBoutFighters(luta.luta);
+  const last1 = canonName(f1).replace(/-/g, ' ').split(' ').pop();
+  const last2 = canonName(f2).replace(/-/g, ' ').split(' ').pop();
+  const sameLast = Boolean(last1 && last1 === last2);
+  return sameFighter(luta.resultado, fighterName, !sameLast);
+}
+
 // ── CARREGAMENTO INSTANTÂNEO + SINCRONIZAÇÃO EM BACKGROUND ───────
 function hydrateFightersStylesFromDb() {
   if (typeof FIGHTERS_DB !== 'object' || !FIGHTERS_DB) return;
   Object.entries(FIGHTERS_DB).forEach(([k, info]) => {
     if (!info || !info.style) return;
     if (!_lutadores[k]) _lutadores[k] = info.style;
-    const last = k.split(' ').pop();
-    if (last && last.length > 3 && !_lutadores[last]) _lutadores[last] = info.style;
+    const nk = normOddName(k);
+    const ck = canonName(k);
+    if (nk && !_lutadores[nk]) _lutadores[nk] = info.style;
+    if (ck && !_lutadores[ck]) _lutadores[ck] = info.style;
   });
 }
 
@@ -161,8 +257,8 @@ function orderCardMainFirst(cardLutas, eventName) {
 
 function getFighterEloCtx(fV, fA, fightObj) {
   if (fightObj && fightObj._eloCtx) return fightObj._eloCtx;
-  const kA = String(fV || '').toLowerCase().trim();
-  const kB = String(fA || '').toLowerCase().trim();
+  const kA = canonName(fV);
+  const kB = canonName(fA);
   return {
     eloA: (window._fighterElo && window._fighterElo[kA]) || 1500,
     eloB: (window._fighterElo && window._fighterElo[kB]) || 1500,
@@ -199,8 +295,8 @@ function ensureAllEventsAnalyzed() {
     if (typeof analyzeFight === 'function') {
       ev.cardLutas.forEach(c => {
         if (!c.fV || !c.fA) return;
-        const kA = c.fV.toLowerCase().trim();
-        const kB = c.fA.toLowerCase().trim();
+        const kA = canonName(c.fV);
+        const kB = canonName(c.fA);
         const eloCtx = {
           eloA: eloMap[kA] || 1500,
           eloB: eloMap[kB] || 1500,
@@ -212,16 +308,12 @@ function ensureAllEventsAnalyzed() {
         const dbA = typeof getFighterData === 'function' ? getFighterData(c.fV) : null;
         const dbB = typeof getFighterData === 'function' ? getFighterData(c.fA) : null;
         const an = analyzeFight(c.fV, c.fA, c.oV, c.oA, dbA, dbB, baseZebraStats, eloCtx);
-        if (!an || !an.pickRecommended) return;
 
         // Atualizar Elo e Momentum APÓS calcular a previsão desta luta (se a luta já tiver resultado)
-        const lutaRes = findLuta(ev, c.fV) || findLuta(ev, c.fA);
-        if (lutaRes && lutaRes.resultado && !NULO.some(x => lutaRes.resultado.toUpperCase().includes(x))) {
-          const resLow = lutaRes.resultado.toLowerCase();
-          const lastV = kA.split(' ').pop();
-          const lastA = kB.split(' ').pop();
-          const f1Won = (lastV && resLow.includes(lastV)) || resLow === kA;
-          const f2Won = !f1Won && ((lastA && resLow.includes(lastA)) || resLow === kB);
+        const lutaRes = findLuta(ev, c.fV, c.fA) || findLuta(ev, c.fV) || findLuta(ev, c.fA);
+        if (lutaRes && lutaRes.resultado && !isDrawOrNC(lutaRes)) {
+          const f1Won = didFighterWin(lutaRes, c.fV);
+          const f2Won = !f1Won && didFighterWin(lutaRes, c.fA);
           if (f1Won || f2Won) {
             const expA = 1 / (1 + Math.pow(10, (eloCtx.eloB - eloCtx.eloA) / 400));
             eloMap[kA] = eloCtx.eloA + 32 * ((f1Won ? 1 : 0) - expA);
@@ -231,6 +323,8 @@ function ensureAllEventsAnalyzed() {
           }
         }
 
+        if (!an || !an.pickRecommended) return;
+
         const phys = an.physical || {};
         const advParts = [];
         if (phys.reachDiff) advParts.push(`Env ${phys.reachDiff > 0 ? '+' : ''}${phys.reachDiff}cm`);
@@ -238,7 +332,7 @@ function ensureAllEventsAnalyzed() {
         if (Math.abs(eloCtx.eloA - eloCtx.eloB) >= 15) {
           advParts.push(`Elo ${Math.round(eloCtx.eloA)}×${Math.round(eloCtx.eloB)}`);
         }
-        const isPickV = an.pickRecommended.toLowerCase() === c.fV.toLowerCase();
+        const isPickV = sameFighter(an.pickRecommended, c.fV, true);
         const pickProb = isPickV ? an.probAdjA : an.probAdjB;
         const impProb = isPickV ? an.probImplA : an.probImplB;
 
@@ -454,15 +548,6 @@ async function syncEspnInBackground() {
   await syncLiveOddsInBackground();
 }
 
-function normOddName(s) {
-  return String(s || '')
-    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
 function getSavedOddsApiKey() {
   try { return (localStorage.getItem('ufc_odds_api_key') || '').trim(); } catch (e) { return ''; }
 }
@@ -509,19 +594,13 @@ async function syncLiveOddsInBackground() {
     for (const ev of futureEvents) {
       let evUpdated = false;
       for (const c of (ev.cardLutas || [])) {
-        const nV = normOddName(c.fV);
-        const nA = normOddName(c.fA);
-        const lV = nV.split(' ').pop();
-        const lA = nA.split(' ').pop();
-        const match = json.matchups.find(m => {
-          const mA = normOddName(m.fighterA);
-          const mB = normOddName(m.fighterB);
-          return ((mA === nV || mA.endsWith(lV)) && (mB === nA || mB.endsWith(lA))) ||
-                 ((mA === nA || mA.endsWith(lA)) && (mB === nV || mB.endsWith(lV)));
-        });
+        const match = json.matchups.find(m =>
+          (sameFighter(m.fighterA, c.fV, true) && sameFighter(m.fighterB, c.fA, true)) ||
+          (sameFighter(m.fighterA, c.fA, true) && sameFighter(m.fighterB, c.fV, true))
+        );
         if (!match) continue;
 
-        const direct = normOddName(match.fighterA) === nV || normOddName(match.fighterA).endsWith(lV);
+        const direct = sameFighter(match.fighterA, c.fV, true);
         const newOV = direct ? match.oddA : match.oddB;
         const newOA = direct ? match.oddB : match.oddA;
         const newBestV = direct ? match.bestOddA : match.bestOddB;
@@ -667,14 +746,12 @@ function integrateEspnEvents(espnEvents) {
       const ex = _eventos[existingIdx];
       const oldLutas = ex.cardLutas || [];
       cardLutas.forEach(espnLuta => {
-        const fVLast = espnLuta.fV.toLowerCase().split(' ').pop();
-        const fALast = espnLuta.fA.toLowerCase().split(' ').pop();
         const sl = oldLutas.find(l =>
-          (l.fV && l.fV.toLowerCase().includes(fVLast)) ||
-          (l.fA && l.fA.toLowerCase().includes(fALast))
+          (sameFighter(l.fV, espnLuta.fV, true) && sameFighter(l.fA, espnLuta.fA, true)) ||
+          (sameFighter(l.fV, espnLuta.fA, true) && sameFighter(l.fA, espnLuta.fV, true))
         );
         if (sl) {
-          if (sl.fV && sl.fV.toLowerCase().includes(fVLast)) {
+          if (sameFighter(sl.fV, espnLuta.fV, true)) {
             if (!espnLuta.oV) espnLuta.oV = sl.oV;
             if (!espnLuta.oA) espnLuta.oA = sl.oA;
           } else {
@@ -691,9 +768,18 @@ function integrateEspnEvents(espnEvents) {
       else if (espnEv.completed) {
         lutas.forEach(nl => {
           if (!nl.resultado) return;
-          const lastW = nl.resultado.toLowerCase().split(' ').pop();
-          const match = ex.lutas.find(ol => ol.luta.toLowerCase().includes(lastW));
-          if (match) { match.resultado = nl.resultado; match.metodo = nl.metodo || match.metodo; }
+          const [nf1, nf2] = getBoutFighters(nl.luta);
+          const match = ex.lutas.find(ol => {
+            const [of1, of2] = getBoutFighters(ol.luta);
+            return (sameFighter(of1, nf1, true) && sameFighter(of2, nf2, true)) ||
+                   (sameFighter(of1, nf2, true) && sameFighter(of2, nf1, true));
+          });
+          if (match) {
+            match.resultado = nl.resultado;
+            match.metodo = nl.metodo || match.metodo;
+            if (nl.metReal) match.metReal = nl.metReal;
+            else if (nl.metodo && !match.metReal) match.metReal = nl.metodo;
+          }
         });
       }
       ex.isEspn = true;
@@ -724,10 +810,9 @@ function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;'
 
 function getLutStyle(name) {
   if (!name) return null;
-  const nl = name.toLowerCase();
-  if (_lutadores[nl]) return _lutadores[nl];
-  const last = nl.split(' ').pop();
-  return (last.length > 3 && _lutadores[last]) || null;
+  const nl = String(name).toLowerCase().trim();
+  const cn = canonName(name);
+  return _lutadores[cn] || _lutadores[nl] || null;
 }
 
 function getStyleCat(s) {
@@ -739,21 +824,35 @@ function getStyleCat(s) {
   return 'Grappler';
 }
 
-function findLuta(ev, fighterName) {
-  if (!fighterName) return null;
-  const tokens = fighterName.toLowerCase().split(' ').filter(p => p.length > 3);
-  return ev.lutas.find(l => {
-    const ll = l.luta.toLowerCase();
-    return tokens.some(p => ll.includes(p));
-  }) || null;
+function findLuta(ev, fighterName, opponentName) {
+  if (!ev || !Array.isArray(ev.lutas) || !fighterName) return null;
+  if (opponentName) {
+    for (const allowLast of [false, true]) {
+      const m = ev.lutas.find(l => {
+        const [f1, f2] = getBoutFighters(l.luta);
+        return (sameFighter(f1, fighterName, allowLast) && sameFighter(f2, opponentName, allowLast)) ||
+               (sameFighter(f1, opponentName, allowLast) && sameFighter(f2, fighterName, allowLast));
+      });
+      if (m) return m;
+    }
+  }
+  for (const allowLast of [false, true]) {
+    const m = ev.lutas.find(l => {
+      const [f1, f2] = getBoutFighters(l.luta);
+      return sameFighter(f1, fighterName, allowLast) || sameFighter(f2, fighterName, allowLast);
+    });
+    if (m) return m;
+  }
+  return null;
 }
 
 function findOdds(oddCard, fighterName) {
-  if (!fighterName) return null;
-  const fl = fighterName.toLowerCase();
-  const tokens = fl.split(' ').filter(p => p.length > 3);
-  const key = Object.keys(oddCard).find(k => k === fl || tokens.some(t => k.includes(t) || t.includes(k.split(' ').pop())));
-  return key ? oddCard[key] : null;
+  if (!oddCard || !fighterName) return null;
+  const keys = Object.keys(oddCard);
+  const kExact = keys.find(k => sameFighter(k, fighterName, false));
+  if (kExact) return oddCard[kExact];
+  const lastMatches = keys.filter(k => sameFighter(k, fighterName, true));
+  return lastMatches.length === 1 ? oddCard[lastMatches[0]] : null;
 }
 
 // ── ODDS CATS ─────────────────────────────────────────────────────
@@ -763,16 +862,15 @@ function computeOddsCatsGeral() {
   _eventos.forEach(ev => {
     ev.lutas.forEach(luta => {
       if (!luta.resultado || !luta.luta) return;
-      if (NULO.some(x => luta.resultado.toUpperCase().includes(x))) return;
-      const parts = luta.luta.split(/\s+VS\s+/i);
-      if (parts.length < 2) return;
-      [parts[0].trim(), parts[1].trim()].forEach(fighter => {
+      if (isDrawOrNC(luta)) return;
+      const [fA, fB] = getBoutFighters(luta.luta);
+      if (!fA || !fB) return;
+      [fA, fB].forEach(fighter => {
         const odds = findOdds(ev.oddCard, fighter);
         if (!odds) return;
         const cat = getOddsCat(odds);
         if (!cat) return;
-        const pickL = fighter.toLowerCase().split(' ').pop();
-        const acertou = luta.resultado.toLowerCase().includes(pickL);
+        const acertou = didFighterWin(luta, fighter);
         stats[cat.key].picks++;
         stats[cat.key].roi += acertou ? (odds - 1) : -1;
         if (acertou) stats[cat.key].acertos++;
@@ -790,14 +888,13 @@ function computeOddsCatsPick() {
       if (!pm.pick) return;
       const luta = findLuta(ev, pm.pick);
       if (!luta || !luta.resultado) return;
-      if (NULO.some(x => luta.resultado.toUpperCase().includes(x))) return;
+      if (isDrawOrNC(luta)) return;
       const odds = findOdds(ev.oddCard, pm.pick);
       if (!odds || odds <= 1.0 || odds > 20) return;
       const cat = getOddsCat(odds);
       if (!cat) return;
       stats[cat.key].picks++;
-      const pickL = pm.pick.toLowerCase().split(' ').pop();
-      const acertou = luta.resultado.toLowerCase().includes(pickL);
+      const acertou = didFighterWin(luta, pm.pick);
       stats[cat.key].roi += acertou ? (odds - 1) : -1;
       if (acertou) stats[cat.key].acertos++;
     });
@@ -822,12 +919,11 @@ function computeStats() {
       if (!pm.pick) return;
       const luta = findLuta(ev, pm.pick);
       if (!luta || !luta.resultado) return;
-      if (NULO.some(x => luta.resultado.toUpperCase().includes(x))) return;
+      if (isDrawOrNC(luta)) return;
       const odds = findOdds(ev.oddCard, pm.pick);
       if (!odds) return;
       pmPicks++;
-      const pickL = pm.pick.toLowerCase().split(' ').pop();
-      const acertou = luta.resultado.toLowerCase().includes(pickL);
+      const acertou = didFighterWin(luta, pm.pick);
       pmROI += acertou ? (odds - 1) : -1;
       if (acertou) pmAcertos++;
     });
@@ -836,20 +932,19 @@ function computeStats() {
     // 🔒 Locks de Elite (probAdj >= 70% + vantagem técnica positiva)
     (ev.cardLutas || []).forEach(c => {
       if (!c.fV || !c.fA || !c.oV || !c.oA || typeof analyzeFight !== 'function') return;
-      const luta = findLuta(ev, c.fV) || findLuta(ev, c.fA);
+      const luta = findLuta(ev, c.fV, c.fA) || findLuta(ev, c.fV) || findLuta(ev, c.fA);
       if (!luta || !luta.resultado) return;
-      if (NULO.some(x => luta.resultado.toUpperCase().includes(x))) return;
+      if (isDrawOrNC(luta)) return;
       const dbA = typeof getFighterData === 'function' ? getFighterData(c.fV) : null;
       const dbB = typeof getFighterData === 'function' ? getFighterData(c.fA) : null;
       const an = analyzeFight(c.fV, c.fA, c.oV, c.oA, dbA, dbB, _zebraStats, c._eloCtx);
       if (!an || !an.pickRecommended) return;
-      const isV = an.pickRecommended.toLowerCase() === c.fV.toLowerCase();
+      const isV = sameFighter(an.pickRecommended, c.fV, true);
       const prob = isV ? an.probAdjA : an.probAdjB;
       const odds = isV ? c.oV : c.oA;
       if (prob < 0.70 || an.multiFactorEdge < 0.01 || !odds || odds <= 1.01) return;
       lockPicks++;
-      const pickL = an.pickRecommended.toLowerCase().split(' ').pop();
-      const acertou = luta.resultado.toLowerCase().includes(pickL);
+      const acertou = didFighterWin(luta, an.pickRecommended);
       lockROI += acertou ? (odds - 1) : -1;
       if (acertou) lockAcertos++;
     });
@@ -860,12 +955,11 @@ function computeStats() {
       const favA = c.oA && c.oA < 1.35 && c.oA > 1.01;
       if (!favV && !favA) return;
       const fav = favV ? { name: c.fV, odds: c.oV } : { name: c.fA, odds: c.oA };
-      const pickL = fav.name.toLowerCase().split(' ').pop();
-      const luta = ev.lutas.find(l => l.luta.toLowerCase().includes(pickL));
+      const luta = findLuta(ev, c.fV, c.fA) || findLuta(ev, fav.name);
       if (!luta || !luta.resultado) return;
-      if (NULO.some(x => luta.resultado.toUpperCase().includes(x))) return;
+      if (isDrawOrNC(luta)) return;
       favPicks++;
-      const acertou = luta.resultado.toLowerCase().includes(pickL);
+      const acertou = didFighterWin(luta, fav.name);
       favROI += acertou ? (fav.odds - 1) : -1;
       if (acertou) favAcertos++;
     });
@@ -878,12 +972,11 @@ function computeStats() {
         else if (c.oA >= 2.50 && c.oA > c.oV) zeb = { name: c.fA, odds: c.oA };
       }
       if (!zeb) return;
-      const pickL = zeb.name.toLowerCase().split(' ').pop();
-      const luta = ev.lutas.find(l => l.luta.toLowerCase().includes(pickL));
+      const luta = findLuta(ev, c.fV, c.fA) || findLuta(ev, zeb.name);
       if (!luta || !luta.resultado) return;
-      if (NULO.some(x => luta.resultado.toUpperCase().includes(x))) return;
+      if (isDrawOrNC(luta)) return;
       zebraPicks++;
-      const acertou = luta.resultado.toLowerCase().includes(pickL);
+      const acertou = didFighterWin(luta, zeb.name);
       zebraROI += acertou ? (zeb.odds - 1) : -1;
       if (acertou) zebraAcertos++;
     });
@@ -908,15 +1001,17 @@ function computeStyleStats() {
       if (!c.fV || !c.fA) return;
       const catV = getStyleCat(getLutStyle(c.fV)), catA = getStyleCat(getLutStyle(c.fA));
       if (!catV || !catA) return;
-      const pickLV = c.fV.toLowerCase().split(' ').pop(), pickLA = c.fA.toLowerCase().split(' ').pop();
-      const luta = ev.lutas.find(l => l.luta.toLowerCase().includes(pickLV) || l.luta.toLowerCase().includes(pickLA));
+      const luta = findLuta(ev, c.fV, c.fA) || findLuta(ev, c.fV) || findLuta(ev, c.fA);
       if (!luta || !luta.resultado) return;
-      if (NULO.some(x => luta.resultado.toUpperCase().includes(x))) return;
+      if (isDrawOrNC(luta)) return;
       if (catV === catA) return;
+      const vWon = didFighterWin(luta, c.fV);
+      const aWon = !vWon && didFighterWin(luta, c.fA);
+      if (!vWon && !aWon) return;
       const key = [catV, catA].sort().join(' vs ');
       if (!matchups[key]) matchups[key] = { total: 0, wins: {} };
       matchups[key].total++;
-      const winCat = luta.resultado.toLowerCase().includes(pickLV) ? catV : catA;
+      const winCat = vWon ? catV : catA;
       matchups[key].wins[winCat] = (matchups[key].wins[winCat] || 0) + 1;
     });
   });
@@ -925,13 +1020,10 @@ function computeStyleStats() {
 
 // ── ALL PICKS ─────────────────────────────────────────────────────
 function pickGanhou(ev, nome) {
-  if (!nome) return null;
-  const nl = nome.toLowerCase().trim();
-  const words = nl.split(' ').filter(w => w.length > 2);
-  const luta = ev.lutas.find(l => words.some(w => l.luta.toLowerCase().includes(w)));
-  if (!luta || !luta.resultado) return null;
-  const rl = luta.resultado.toLowerCase();
-  return words.some(w => rl.includes(w));
+  if (!ev || !nome) return null;
+  const luta = findLuta(ev, nome);
+  if (!luta || !luta.resultado || isDrawOrNC(luta)) return null;
+  return didFighterWin(luta, nome);
 }
 
 function computeApostasROI() {
@@ -1205,11 +1297,10 @@ function renderAllPicks() {
       if (!pm.pick) return;
       const luta = findLuta(ev, pm.pick);
       if (!luta || !luta.resultado) return;
-      if (NULO.some(x => luta.resultado.toUpperCase().includes(x))) return;
+      if (isDrawOrNC(luta)) return;
       const odds = findOdds(ev.oddCard, pm.pick);
       if (!odds) return;
-      const pickL = pm.pick.toLowerCase().split(' ').pop();
-      const acertou = luta.resultado.toLowerCase().includes(pickL);
+      const acertou = didFighterWin(luta, pm.pick);
       picks++;
       evLucro += acertou ? STAKE * (odds - 1) : -STAKE;
       if (acertou) acertos++;
@@ -1483,9 +1574,8 @@ function evaluateMyBetsHistory() {
 
     if (ev && !ev.isFuturo && item.pick) {
       const luta = findLuta(ev, item.pick);
-      if (luta && luta.resultado && !NULO.some(x => luta.resultado.toUpperCase().includes(x))) {
-        const pickLast = item.pick.toLowerCase().split(' ').pop();
-        const hit = luta.resultado.toLowerCase().includes(pickLast);
+      if (luta && luta.resultado && !isDrawOrNC(luta)) {
+        const hit = didFighterWin(luta, item.pick);
         status = hit ? 'GREEN' : 'RED';
         lucro = hit ? (odd - 1) : -1;
         roiUnits += lucro;
@@ -1773,12 +1863,15 @@ function renderEvento() {
       let statusHtml = '<span style="color:var(--text3);font-size:12px">⏳ Futuro</span>';
       if (!ev.isFuturo && pm.pick) {
         const luta = findLuta(ev, pm.pick);
-        if (luta && luta.resultado && !NULO.some(x => luta.resultado.toUpperCase().includes(x))) {
-          const pickL = pm.pick.toLowerCase().split(' ').pop();
-          const hit = luta.resultado.toLowerCase().includes(pickL);
-          statusHtml = hit
-            ? '<span class="badge badge-win">✅ Green</span>'
-            : '<span class="badge badge-ev-n">❌ Red</span>';
+        if (luta && luta.resultado) {
+          if (isDrawOrNC(luta)) {
+            statusHtml = '<span class="badge badge-ev-n">🤝 Empate/NC</span>';
+          } else {
+            const hit = didFighterWin(luta, pm.pick);
+            statusHtml = hit
+              ? '<span class="badge badge-win">✅ Green</span>'
+              : '<span class="badge badge-ev-n">❌ Red</span>';
+          }
         }
       }
 
@@ -1944,12 +2037,11 @@ function buildFightCard(c, ev, idx, preAnalysis = null, preDbA = null, preDbB = 
   const oddsAHtml = renderOdds(oA, analysis?.oddsEstB, c.espnOdds, c.bestOA, c.bestBookA, c.openOA);
 
   // Resultado
-  const luta = findLuta(ev, fV || fA);
+  const luta = findLuta(ev, fV, fA) || findLuta(ev, fV || fA);
   const resultado = luta?.resultado || null;
-  const winLastV = (fV || '').toLowerCase().split(' ').pop();
-  const winLastA = (fA || '').toLowerCase().split(' ').pop();
-  const isWinV = Boolean(resultado && winLastV && resultado.toLowerCase().includes(winLastV));
-  const isWinA = Boolean(resultado && winLastA && resultado.toLowerCase().includes(winLastA));
+  const isNullRes = isDrawOrNC(luta);
+  const isWinV = Boolean(resultado && !isNullRes && didFighterWin(luta, fV));
+  const isWinA = Boolean(resultado && !isNullRes && didFighterWin(luta, fA));
 
   // Barra de probabilidade comparativa
   const pV = analysis?.probAdjA ? Math.round(analysis.probAdjA * 100) : 50;
@@ -1968,7 +2060,12 @@ function buildFightCard(c, ev, idx, preAnalysis = null, preDbA = null, preDbB = 
     badges += `<span class="badge badge-lock" title="${escHtml(tip)}">📊 ${c.booksCount} fontes</span>`;
   }
   if (resultado) {
-    badges += `<span class="badge badge-win">✅ Venceu: ${escHtml(resultado)}${luta?.metodo ? ' (' + escHtml(luta.metodo) + ')' : ''}</span>`;
+    const metShow = luta?.metReal || luta?.metodo || '';
+    if (isNullRes) {
+      badges += `<span class="badge badge-ev-n">🤝 ${escHtml(resultado)}${metShow && metShow.toLowerCase() !== resultado.toLowerCase() ? ' (' + escHtml(metShow) + ')' : ''}</span>`;
+    } else {
+      badges += `<span class="badge badge-win">✅ Venceu: ${escHtml(resultado)}${metShow ? ' (' + escHtml(metShow) + ')' : ''}</span>`;
+    }
   }
 
   // Banner do Pick recomendado do modelo (Alta Precisão vs Luta Equilibrada)
@@ -2604,9 +2701,10 @@ function renderFighterProfileSummary(name, data) {
   const sumEl = document.getElementById('fighter-profile-summary');
   if (!sumEl) return;
 
+  const cn = canonName(name);
   const norm = normOddName(name);
-  const elo = Math.round((window._fighterElo && window._fighterElo[norm]) || 1500);
-  const streak = (window._fighterStreak && window._fighterStreak[norm]) || 0;
+  const elo = Math.round((window._fighterElo && (window._fighterElo[cn] ?? window._fighterElo[norm])) || 1500);
+  const streak = (window._fighterStreak && (window._fighterStreak[cn] ?? window._fighterStreak[norm])) || 0;
   const streakTxt = streak > 0 ? `+${streak}W` : streak < 0 ? `${streak}L` : '0';
   const rec = (data && data.wins != null && data.losses != null)
     ? `${data.wins}-${data.losses}${data.draws ? '-' + data.draws : ''}`
@@ -2623,26 +2721,34 @@ function renderFighterProfileSummary(name, data) {
     : '—';
 
   const fights = [];
-  const lastTok = norm.split(' ').pop();
   for (const ev of _eventos) {
     for (const c of (ev.cardLutas || [])) {
-      const nV = normOddName(c.fV);
-      const nA = normOddName(c.fA);
-      const isV = nV === norm || (lastTok.length > 3 && nV.endsWith(' ' + lastTok));
-      const isA = nA === norm || (lastTok.length > 3 && nA.endsWith(' ' + lastTok));
+      const isV = sameFighter(c.fV, name, false);
+      const isA = !isV && sameFighter(c.fA, name, false);
       if (!isV && !isA) continue;
       const opp = isV ? c.fA : c.fV;
       const myOdd = isV ? c.oV : c.oA;
-      const lutaRes = findLuta(ev, name);
-      let statusBadge = '<span style="color:var(--gold)">⏳ Agendada</span>';
+      const lutaRes = findLuta(ev, name, opp);
+      let statusBadge = ev.isFuturo
+        ? '<span style="color:var(--gold)">⏳ Agendada</span>'
+        : '<span style="color:var(--text3)">— Sem resultado</span>';
       let methodTxt = '';
       if (!ev.isFuturo && lutaRes && lutaRes.resultado) {
-        const resNorm = normOddName(lutaRes.resultado);
-        const won = resNorm === norm || (lastTok.length > 3 && resNorm.includes(lastTok));
-        statusBadge = won
-          ? '<span style="color:var(--green);font-weight:700">✅ Vitória</span>'
-          : '<span style="color:var(--red);font-weight:700">❌ Derrota</span>';
-        methodTxt = lutaRes.metodo ? ` · ${lutaRes.metodo}` : '';
+        if (isDrawOrNC(lutaRes)) {
+          const rUp = String(lutaRes.resultado || '').toUpperCase();
+          const mUp = String(lutaRes.metReal || lutaRes.metodo || '').toUpperCase();
+          const isNC = rUp === 'NC' || rUp.includes('NO CONTEST') || rUp.includes('SEM CONTEST') || mUp === 'NC';
+          statusBadge = isNC
+            ? '<span style="color:var(--text3);font-weight:700">⚪ NC</span>'
+            : '<span style="color:var(--gold);font-weight:700">🤝 Empate</span>';
+        } else {
+          const won = didFighterWin(lutaRes, name);
+          statusBadge = won
+            ? '<span style="color:var(--green);font-weight:700">✅ Vitória</span>'
+            : '<span style="color:var(--red);font-weight:700">❌ Derrota</span>';
+        }
+        const mShow = lutaRes.metReal || lutaRes.metodo || '';
+        methodTxt = mShow ? ` · ${mShow}` : '';
       }
       fights.push({
         evento: ev.nome,
@@ -2698,16 +2804,21 @@ function searchGlobalFighters(query) {
 
   const results = [];
   const seen = new Set();
+  const normQ = normOddName(query).replace(/-/g, ' ');
   if (typeof FIGHTERS_DB === 'object' && FIGHTERS_DB) {
     for (const [k, info] of Object.entries(FIGHTERS_DB)) {
-      if (k.includes(q)) {
-        const displayName = (info && info.name) || k.replace(/\b\w/g, ch => ch.toUpperCase());
-        const elo = Math.round((window._fighterElo && window._fighterElo[k]) || 1500);
-        const rec = (info && info.wins != null && info.losses != null) ? `${info.wins}-${info.losses}` : '';
-        results.push({ name: displayName, style: info?.style || 'MMA', rec, elo });
-        seen.add(k);
-        if (results.length >= 8) break;
-      }
+      if (!k.includes(' ') && info?.wins == null && !info?.ufc_recent) continue;
+      const nk = normOddName(k).replace(/-/g, ' ');
+      const ck = canonName(k);
+      const displayName = (info && info.name) || k.replace(/\b\w/g, ch => ch.toUpperCase());
+      const nd = normOddName(displayName).replace(/-/g, ' ');
+      if (!nk.includes(normQ) && !nd.includes(normQ) && !ck.replace(/-/g, ' ').includes(normQ)) continue;
+      if (seen.has(ck)) continue;
+      const elo = Math.round((window._fighterElo && (window._fighterElo[ck] ?? window._fighterElo[k])) || 1500);
+      const rec = (info && info.wins != null && info.losses != null) ? `${info.wins}-${info.losses}` : (info?.ufc_recent ? `${info.ufc_recent} UFC` : '');
+      results.push({ name: displayName, style: info?.style || 'MMA', rec, elo });
+      seen.add(ck);
+      if (results.length >= 8) break;
     }
   }
 
@@ -2715,12 +2826,14 @@ function searchGlobalFighters(query) {
     for (const ev of _eventos) {
       for (const c of (ev.cardLutas || [])) {
         for (const fName of [c.fV, c.fA]) {
-          const nk = normOddName(fName);
-          if (!nk || seen.has(nk) || !nk.includes(q)) continue;
+          const nk = normOddName(fName).replace(/-/g, ' ');
+          const ck = canonName(fName);
+          if (!ck || seen.has(ck) || (!nk.includes(normQ) && !ck.replace(/-/g, ' ').includes(normQ))) continue;
           const db = typeof getFighterData === 'function' ? getFighterData(fName) : null;
-          const elo = Math.round((window._fighterElo && window._fighterElo[nk]) || 1500);
-          results.push({ name: fName, style: db?.style || 'MMA', rec: db?.wins != null ? `${db.wins}-${db.losses}` : '', elo });
-          seen.add(nk);
+          const elo = Math.round((window._fighterElo && (window._fighterElo[ck] ?? window._fighterElo[nk])) || 1500);
+          const rec = db?.wins != null ? `${db.wins}-${db.losses}` : (db?.ufc_recent ? `${db.ufc_recent} UFC` : '');
+          results.push({ name: db?.name || fName, style: db?.style || 'MMA', rec, elo });
+          seen.add(ck);
           if (results.length >= 8) break;
         }
         if (results.length >= 8) break;

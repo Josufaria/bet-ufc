@@ -222,6 +222,62 @@ function parseDateMs(s) {
   return isNaN(parsed) ? 0 : parsed;
 }
 
+function stripAccents(s) {
+  return String(s || '')
+    .replace(/[łŁ]/g, 'l')
+    .replace(/[đĐ]/g, 'd')
+    .replace(/[øØ]/g, 'o')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+}
+
+function cleanFighterName(s) {
+  return String(s || '')
+    .replace(/\s*\((?:c|ic)\)\s*/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function normKey(s) {
+  return stripAccents(cleanFighterName(s))
+    .toLowerCase()
+    .replace(/[^a-z0-9\s'-]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+const CANONICAL_ALIASES = {
+  "abdul rakhman yakhyaev": "abdul-rakhman yakhyaev",
+  "abus magomedov": "abusupiyan magomedov",
+  "patricio pitbull": "patricio freire",
+  "patricio \"pitbull\" freire": "patricio freire",
+  "shara magomedov": "sharabutdin magomedov",
+  "shara bullet": "sharabutdin magomedov",
+  "bia mesquita": "beatriz mesquita",
+  "lupita godinez": "loopy godinez",
+  "king green": "bobby green",
+  "sumudaerji": "su mudaerji",
+  "aoriqileng": "aori qileng",
+  "rong zhu": "rongzhu",
+  "sergey spivak": "serghei spivac",
+  "serghei spivak": "serghei spivac",
+  "chepe mariscal": "jose mariscal",
+  "jiri prochazka": "jiri prochazka",
+  "khalil rountree": "khalil rountree jr",
+  "khalil rountree jr.": "khalil rountree jr",
+  "raul rosas jr.": "raul rosas jr",
+  "michael aswell jr.": "michael aswell",
+  "michael aswell jr": "michael aswell",
+  "baisangur susurkaev": "baisangur susurkajev",
+  "eduardo chapolin": "eduardo henrique",
+  "marcus buchecha": "marcus almeida"
+};
+
+function resolveCanonical(s) {
+  const k = normKey(s);
+  return CANONICAL_ALIASES[k] || k;
+}
+
 function parseEventoRows(nome, d, tipsters) {
   if (!d || !d.length) return null;
   const dataEvento = normalizeDateBR(String(d[0]?.[0] || ''));
@@ -243,16 +299,22 @@ function parseEventoRows(nome, d, tipsters) {
       if (r < d.length && String(d[r]?.[0] || '').includes('Lutador')) r++;
       while (r < d.length) {
         const cRow = d[r] || [];
-        const fV = String(cRow[0] || '').trim();
-        const fA = String(cRow[4] || '').trim();
+        const fV = cleanFighterName(cRow[0]);
+        const fA = cleanFighterName(cRow[4]);
         if (!fV && !fA) break;
         if (fV.toUpperCase().includes('RESULTADO') || String(cRow[1] || '').toUpperCase().includes('RESULTADO')) break;
         if (fV.toUpperCase() === 'LUTA') break;
 
         const oV = parseFloat(String(cRow[1] || '').replace(',', '.'));
         const oA = parseFloat(String(cRow[3] || '').replace(',', '.'));
-        if (fV && !isNaN(oV)) oddCard[fV.toLowerCase()] = oV;
-        if (fA && !isNaN(oA)) oddCard[fA.toLowerCase()] = oA;
+        if (fV && !isNaN(oV)) {
+          oddCard[fV.toLowerCase()] = oV;
+          oddCard[normKey(fV)] = oV;
+        }
+        if (fA && !isNaN(oA)) {
+          oddCard[fA.toLowerCase()] = oA;
+          oddCard[normKey(fA)] = oA;
+        }
         cardLutas.push({ fV, oV: isNaN(oV) ? null : oV, fA, oA: isNaN(oA) ? null : oA });
         r++;
       }
@@ -270,13 +332,15 @@ function parseEventoRows(nome, d, tipsters) {
       r++;
       while (r < d.length) {
         const rRow = d[r] || [];
-        const luta = String(rRow[0] || '').trim();
-        if (!luta || luta.toUpperCase().includes('PUNTERMIND')) break;
-        if (luta.toUpperCase().includes('ACERTOS') || luta.toUpperCase().includes('% ACERTO')) break;
-        const resultado = String(rRow[1] || '').trim();
+        const rawLuta = String(rRow[0] || '').trim();
+        if (!rawLuta || rawLuta.toUpperCase().includes('PUNTERMIND')) break;
+        if (rawLuta.toUpperCase().includes('ACERTOS') || rawLuta.toUpperCase().includes('% ACERTO')) break;
+        const parts = rawLuta.split(/\s+vs\.?\s+/i);
+        const luta = parts.length >= 2 ? `${cleanFighterName(parts[0])} vs ${cleanFighterName(parts[1])}` : cleanFighterName(rawLuta);
+        const resultado = cleanFighterName(rRow[1]);
         const picks = {};
         tipsters.forEach(t => {
-          if (tipCol[t] !== undefined) picks[t] = String(rRow[tipCol[t]] || '').trim();
+          if (tipCol[t] !== undefined) picks[t] = cleanFighterName(rRow[tipCol[t]]);
         });
         lutas.push({ luta, resultado, metReal: String(rRow[2] || '').trim(), picks });
         r++;
@@ -289,11 +353,13 @@ function parseEventoRows(nome, d, tipsters) {
       if (r < d.length && String(d[r]?.[0] || '').includes('Luta')) r++;
       while (r < d.length) {
         const pRow = d[r] || [];
-        const luta = String(pRow[0] || '').trim();
-        if (!luta || luta.toUpperCase().includes('APOSTAS')) break;
-        if (luta.toUpperCase() === 'TIPO') break;
+        const rawLuta = String(pRow[0] || '').trim();
+        if (!rawLuta || rawLuta.toUpperCase().includes('APOSTAS')) break;
+        if (rawLuta.toUpperCase() === 'TIPO') break;
+        const parts = rawLuta.split(/\s+vs\.?\s+/i);
+        const luta = parts.length >= 2 ? `${cleanFighterName(parts[0])} vs ${cleanFighterName(parts[1])}` : cleanFighterName(rawLuta);
         const evStr = String(pRow[4] || '').trim() || String(pRow[3] || '').trim();
-        const pick = String(pRow[5] || '').trim() || String(pRow[4] || '').trim();
+        const pick = cleanFighterName(String(pRow[5] || '').trim() || String(pRow[4] || '').trim());
         punterAnalise.push({
           luta,
           fisico: String(pRow[1] || '').trim(),
@@ -359,13 +425,19 @@ function convertSnippetEvent(rawEv, forceCompleted = false) {
   const lutas = [];
 
   for (const f of rawEv.fights || []) {
-    const fV = String(f.f1 || '').trim();
-    const fA = String(f.f2 || '').trim();
+    const fV = cleanFighterName(f.f1);
+    const fA = cleanFighterName(f.f2);
     if (!fV || !fA) continue;
     const oV = typeof f.oV === 'number' && f.oV > 1 ? +f.oV.toFixed(2) : null;
     const oA = typeof f.oA === 'number' && f.oA > 1 ? +f.oA.toFixed(2) : null;
-    if (oV) oddCard[fV.toLowerCase()] = oV;
-    if (oA) oddCard[fA.toLowerCase()] = oA;
+    if (oV) {
+      oddCard[fV.toLowerCase()] = oV;
+      oddCard[normKey(fV)] = oV;
+    }
+    if (oA) {
+      oddCard[fA.toLowerCase()] = oA;
+      oddCard[normKey(fA)] = oA;
+    }
 
     cardLutas.push({
       fV,
@@ -375,12 +447,15 @@ function convertSnippetEvent(rawEv, forceCompleted = false) {
       weightClass: f.weightClass || null,
     });
 
-    const res = f.winner ? String(f.winner).trim() : (f.method && f.method.toLowerCase().includes('draw') ? 'DRAW' : '');
+    const normMet = normalizeMethod(f.method || '');
+    let res = f.winner ? cleanFighterName(f.winner) : '';
+    if (!res && normMet === 'Empate') res = 'Empate';
+    if (!res && normMet === 'NC') res = 'NC';
     if (res || forceCompleted) {
       lutas.push({
         luta: `${fV} vs ${fA}`,
         resultado: res,
-        metReal: normalizeMethod(f.method || ''),
+        metReal: normMet,
         picks: {},
       });
     }
@@ -414,6 +489,93 @@ function loadTxtPayload(filePath, varName) {
 // ── 3. VERIFIED 2026 EVENTS & FIGHTERS DATA ───────────────────────────────────
 // Resultados auditados de Jun–Nov 2026 e Próximos Cards Nov–Dez 2026
 const EXTRA_EVENTS_2026 = [
+  // Concluídos (Jun–Ago 2026)
+  {
+    name: "UFC Fight Night: Fiziev vs. Torres",
+    date: "27/06/2026",
+    fights: [
+      { f1: "Rafael Fiziev", f2: "Manuel Torres", winner: "Rafael Fiziev", method: "KO/TKO", weightClass: "Lightweight" },
+      { f1: "Sharabutdin Magomedov", f2: "Michel Pereira", winner: "Sharabutdin Magomedov", method: "Decisão", weightClass: "Middleweight" },
+      { f1: "Nazim Sadykhov", f2: "Matheus Camilo", winner: "Matheus Camilo", method: "KO/TKO", weightClass: "Lightweight" },
+      { f1: "Asu Almabayev", f2: "Charles Johnson", winner: "Asu Almabayev", method: "Submissão", weightClass: "Flyweight" },
+      { f1: "Ikram Aliskerov", f2: "Brunno Ferreira", winner: "Ikram Aliskerov", method: "Decisão", weightClass: "Middleweight" },
+      { f1: "Abusupiyan Magomedov", f2: "Michał Oleksiejczuk", winner: "Abusupiyan Magomedov", method: "Submissão", weightClass: "Middleweight" },
+      { f1: "Farman Hasanov", f2: "Eric Nolan", winner: "Farman Hasanov", method: "Decisão", weightClass: "Welterweight" },
+      { f1: "Abdul-Rakhman Yakhyaev", f2: "Julius Walker", winner: "Abdul-Rakhman Yakhyaev", method: "KO/TKO", weightClass: "Light Heavyweight" },
+      { f1: "Nursulton Ruziboev", f2: "Andrey Pulyaev", winner: "Nursulton Ruziboev", method: "Submissão", weightClass: "Middleweight" },
+      { f1: "Kaan Ofli", f2: "Javier Reyes", winner: "Kaan Ofli", method: "Submissão", weightClass: "Featherweight" },
+      { f1: "Daniil Donchenko", f2: "Theodor Berggren", winner: "Daniil Donchenko", method: "KO/TKO", weightClass: "Welterweight" },
+      { f1: "Bekzat Almakhan", f2: "Jean Matsumoto", winner: "Jean Matsumoto", method: "Decisão", weightClass: "Bantamweight" },
+      { f1: "Tahir Abdullayev", f2: "Jefferson Nascimento", winner: "Tahir Abdullayev", method: "KO/TKO", weightClass: "Welterweight" }
+    ]
+  },
+  {
+    name: "UFC 329: McGregor vs. Holloway 2",
+    date: "11/07/2026",
+    fights: [
+      { f1: "Conor McGregor", f2: "Max Holloway", winner: "Max Holloway", method: "KO/TKO", weightClass: "Welterweight" },
+      { f1: "Benoît Saint Denis", f2: "Paddy Pimblett", winner: "Paddy Pimblett", method: "Submissão", weightClass: "Lightweight" },
+      { f1: "Cory Sandhagen", f2: "Mario Bautista", winner: "Mario Bautista", method: "Decisão", weightClass: "Bantamweight" },
+      { f1: "Brandon Royval", f2: "Lone'er Kavanagh", winner: "Brandon Royval", method: "Submissão", weightClass: "Flyweight" },
+      { f1: "Robert Whittaker", f2: "Nikita Krylov", winner: "Robert Whittaker", method: "KO/TKO", weightClass: "Light Heavyweight" },
+      { f1: "Gable Steveson", f2: "Elisha Ellison", winner: "Gable Steveson", method: "KO/TKO", weightClass: "Heavyweight" },
+      { f1: "Cody Garbrandt", f2: "Adrian Yañez", winner: "Adrian Yañez", method: "KO/TKO", weightClass: "Bantamweight" },
+      { f1: "Luke Riley", f2: "Kai Kamaka III", winner: "Luke Riley", method: "KO/TKO", weightClass: "Featherweight" },
+      { f1: "Tracy Cortez", f2: "Wang Cong", winner: "Wang Cong", method: "Decisão", weightClass: "W. Flyweight" },
+      { f1: "Damian Pinas", f2: "César Almeida", winner: "Damian Pinas", method: "KO/TKO", weightClass: "Middleweight" },
+      { f1: "Ryan Gandra", f2: "Zachary Reese", winner: "Ryan Gandra", method: "KO/TKO", weightClass: "Middleweight" }
+    ]
+  },
+  {
+    name: "UFC Fight Night 281",
+    date: "18/07/2026",
+    fights: [
+      { f1: "Dricus Du Plessis", f2: "Kamaru Usman", oV: 1.45, oA: 2.80, winner: "Dricus Du Plessis", method: "Decisão", weightClass: "Middleweight" },
+      { f1: "Jared Cannonier", f2: "Christian Leroy Duncan", winner: "Christian Leroy Duncan", method: "Decisão", weightClass: "Middleweight" },
+      { f1: "Alden Coria", f2: "Stewart Nicoll", winner: "Alden Coria", method: "Decisão", weightClass: "Flyweight" },
+      { f1: "Chase Hooper", f2: "Mitch Ramirez", winner: "Chase Hooper", method: "Submissão", weightClass: "Lightweight" }
+    ]
+  },
+  {
+    name: "UFC Fight Night: Ankalaev vs. Rountree Jr.",
+    date: "25/07/2026",
+    fights: [
+      { f1: "Magomed Ankalaev", f2: "Bogdan Guskov", winner: "Magomed Ankalaev", method: "KO/TKO", weightClass: "Light Heavyweight" },
+      { f1: "Steve Erceg", f2: "Ramazan Temirov", winner: "Ramazan Temirov", method: "KO/TKO", weightClass: "Flyweight" },
+      { f1: "Rizvan Kuniev", f2: "Tyrell Fortune", winner: "Rizvan Kuniev", method: "KO/TKO", weightClass: "Heavyweight" },
+      { f1: "Valter Walker", f2: "Thomas Petersen", winner: "Valter Walker", method: "Submissão", weightClass: "Heavyweight" },
+      { f1: "Magomed Tuchalov", f2: "Brendson Ribeiro", winner: "Magomed Tuchalov", method: "Decisão", weightClass: "Light Heavyweight" },
+      { f1: "Ismael Bonfim", f2: "Axel Sola", winner: "Axel Sola", method: "Submissão", weightClass: "Lightweight" }
+    ]
+  },
+  {
+    name: "UFC Fight Night: Medić vs. Rodriguez",
+    date: "01/08/2026",
+    fights: [
+      { f1: "Uroš Medić", f2: "Daniel Rodriguez", winner: "Uroš Medić", method: "KO/TKO", weightClass: "Welterweight" },
+      { f1: "Jan Błachowicz", f2: "Navajo Stirling", winner: "Navajo Stirling", method: "KO/TKO", weightClass: "Light Heavyweight" },
+      { f1: "Aleksandar Rakić", f2: "Marcin Tybura", winner: "Aleksandar Rakić", method: "Decisão", weightClass: "Heavyweight" },
+      { f1: "Oban Elliott", f2: "Michael Oliveira", winner: "Michael Oliveira", method: "KO/TKO", weightClass: "Welterweight" },
+      { f1: "Ľudovít Klein", f2: "Tofiq Musayev", winner: "Tofiq Musayev", method: "KO/TKO", weightClass: "Lightweight" },
+      { f1: "Mark Vologdin", f2: "Borislav Nikolić", winner: "Borislav Nikolić", method: "Decisão", weightClass: "Bantamweight" },
+      { f1: "Duško Todorović", f2: "Robert Valentin", winner: "Robert Valentin", method: "Submissão", weightClass: "Middleweight" },
+      { f1: "Dennis Buzukja", f2: "Bogdan Grad", winner: "Bogdan Grad", method: "Submissão", weightClass: "Featherweight" },
+      { f1: "Vlasto Čepo", f2: "Gilbert Urbina", winner: "Gilbert Urbina", method: "KO/TKO", weightClass: "Middleweight" },
+      { f1: "Jovan Leka", f2: "Alexander Poppeck", winner: "Jovan Leka", method: "KO/TKO", weightClass: "Light Heavyweight" }
+    ]
+  },
+  {
+    name: "UFC 330: Makhachev vs. Machado Garry",
+    date: "15/08/2026",
+    fights: [
+      { f1: "Islam Makhachev", f2: "Ian Machado Garry", winner: "Islam Makhachev", method: "Decisão", weightClass: "Welterweight" },
+      { f1: "Mackenzie Dern", f2: "Gillian Robertson", winner: "Mackenzie Dern", method: "Decisão", weightClass: "W. Strawweight" },
+      { f1: "Jalin Turner", f2: "Kauê Fernandes", winner: "Jalin Turner", method: "KO/TKO", weightClass: "Lightweight" },
+      { f1: "Dustin Stoltzfus", f2: "Mansur Abdul-Malik", winner: "Dustin Stoltzfus", method: "Submissão", weightClass: "Middleweight" },
+      { f1: "Esteban Ribovics", f2: "Edson Barboza", winner: "Esteban Ribovics", method: "KO/TKO", weightClass: "Lightweight" }
+    ]
+  },
+
   // Concluídos (Sep-Nov 2026)
   {
     name: "UFC Fight Night: Hooker vs. Parnasse",
@@ -431,7 +593,11 @@ const EXTRA_EVENTS_2026 = [
     name: "Noche UFC: Silva vs. Delgado",
     date: "12/09/2026",
     fights: [
-      { f1: "Jean Silva", f2: "Jose Miguel Delgado", oV: 1.38, oA: 3.10, winner: "Jean Silva", method: "Submissão", weightClass: "Featherweight" }
+      { f1: "Jean Silva", f2: "Jose Miguel Delgado", oV: 1.38, oA: 3.10, winner: "Jean Silva", method: "Submissão", weightClass: "Featherweight" },
+      { f1: "Brandon Moreno", f2: "Joseph Morales", oV: 1.45, oA: 2.80, winner: "Brandon Moreno", method: "Decisão", weightClass: "Flyweight" },
+      { f1: "Tommy McMillen", f2: "Marwan Rahiki", oV: 1.80, oA: 2.00, winner: "Tommy McMillen", method: "Decisão", weightClass: "Featherweight" },
+      { f1: "Alexa Grasso", f2: "Manon Fiorot", oV: 2.10, oA: 1.75, winner: "Alexa Grasso", method: "Decisão", weightClass: "W. Flyweight" },
+      { f1: "Curtis Blaydes", f2: "Waldo Cortes-Acosta", oV: 1.55, oA: 2.50, winner: "Curtis Blaydes", method: "Decisão", weightClass: "Heavyweight" }
     ]
   },
   {
@@ -450,7 +616,8 @@ const EXTRA_EVENTS_2026 = [
     date: "26/09/2026",
     fights: [
       { f1: "Raul Rosas Jr.", f2: "Raoni Barcelos", oV: 1.55, oA: 2.50, winner: "Raul Rosas Jr.", method: "KO/TKO", weightClass: "Bantamweight" },
-      { f1: "Ailin Perez", f2: "Norma Dumont", oV: 2.15, oA: 1.72, winner: "Ailin Perez", method: "Decisão", weightClass: "W. Bantamweight" }
+      { f1: "Ailin Perez", f2: "Norma Dumont", oV: 2.15, oA: 1.72, winner: "Ailin Perez", method: "Decisão", weightClass: "W. Bantamweight" },
+      { f1: "Luis Hernandez", f2: "Sedriques Dumas", oV: 1.65, oA: 2.25, winner: "Luis Hernandez", method: "Submissão", weightClass: "Light Heavyweight" }
     ]
   },
   {
@@ -469,7 +636,9 @@ const EXTRA_EVENTS_2026 = [
     date: "10/10/2026",
     fights: [
       { f1: "Brendan Allen", f2: "Christian Leroy Duncan", oV: 1.62, oA: 2.35, winner: "Brendan Allen", method: "Submissão", weightClass: "Middleweight" },
-      { f1: "Ketlen Souza", f2: "Loopy Godinez", oV: 2.40, oA: 1.58, winner: "Ketlen Souza", method: "Decisão", weightClass: "W. Strawweight" },
+      { f1: "Matheus Camilo", f2: "Jai Herbert", oV: 1.72, oA: 2.15, winner: "Matheus Camilo", method: "Decisão", weightClass: "Lightweight" },
+      { f1: "Ketlen Souza", f2: "Loopy Godinez", oV: 2.40, oA: 1.58, winner: "Loopy Godinez", method: "Decisão", weightClass: "W. Strawweight" },
+      { f1: "Andre Fili", f2: "Kai Kamaka III", oV: 2.05, oA: 1.80, winner: "Andre Fili", method: "KO/TKO", weightClass: "Featherweight" },
       { f1: "Otari Tanzilovi", f2: "Malcolm Wellmaker", oV: 1.95, oA: 1.85, winner: "Otari Tanzilovi", method: "KO/TKO", weightClass: "Bantamweight" }
     ]
   },
@@ -481,7 +650,8 @@ const EXTRA_EVENTS_2026 = [
       { f1: "Erin Blanchfield", f2: "Jasmine Jasudavicius", oV: 1.53, oA: 2.55, winner: "Jasmine Jasudavicius", method: "Decisão", weightClass: "W. Flyweight" },
       { f1: "Cristian Perez", f2: "Kyle Nelson", oV: 1.75, oA: 2.10, winner: "Cristian Perez", method: "KO/TKO", weightClass: "Lightweight" },
       { f1: "Marc-Andre Barriault", f2: "Kyle Daukaus", oV: 2.05, oA: 1.78, winner: "Marc-Andre Barriault", method: "KO/TKO", weightClass: "Middleweight" },
-      { f1: "Timmy Cuamba", f2: "Louis Jourdain", oV: 1.80, oA: 2.00, winner: "Timmy Cuamba", method: "Submissão", weightClass: "Featherweight" }
+      { f1: "Timmy Cuamba", f2: "Louis Jourdain", oV: 1.80, oA: 2.00, winner: "Timmy Cuamba", method: "Submissão", weightClass: "Featherweight" },
+      { f1: "Mandel Nallo", f2: "Nate Landwehr", oV: 1.85, oA: 1.95, winner: "Mandel Nallo", method: "KO/TKO", weightClass: "Lightweight" }
     ]
   },
   {
@@ -503,7 +673,8 @@ const EXTRA_EVENTS_2026 = [
       { f1: "Jacobe Smith", f2: "Randy Brown", oV: 1.62, oA: 2.30, winner: "Jacobe Smith", method: "Decisão", weightClass: "Welterweight" },
       { f1: "Cody Durden", f2: "Ode' Osbourne", oV: 1.68, oA: 2.20, winner: "Cody Durden", method: "Decisão", weightClass: "Flyweight" },
       { f1: "Luana Santos", f2: "Yana Santos", oV: 1.55, oA: 2.50, winner: "Luana Santos", method: "Decisão", weightClass: "W. Bantamweight" },
-      { f1: "Jean-Paul Lebosnoyani", f2: "Farman Hasanov", oV: 1.75, oA: 2.10, winner: "Jean-Paul Lebosnoyani", method: "KO/TKO", weightClass: "Welterweight" }
+      { f1: "Jean-Paul Lebosnoyani", f2: "Farman Hasanov", oV: 1.75, oA: 2.10, winner: "Jean-Paul Lebosnoyani", method: "KO/TKO", weightClass: "Welterweight" },
+      { f1: "Zachary Reese", f2: "Mickey Gall", oV: 1.50, oA: 2.65, winner: "Zachary Reese", method: "Decisão", weightClass: "Middleweight" }
     ]
   },
   {
@@ -512,7 +683,7 @@ const EXTRA_EVENTS_2026 = [
     fights: [
       { f1: "Waldo Cortes-Acosta", f2: "Johnny Walker", oV: 1.72, oA: 2.15, winner: "Johnny Walker", method: "KO/TKO", weightClass: "Heavyweight" },
       { f1: "Tatiana Suarez", f2: "Virna Jandiroba", oV: 1.45, oA: 2.80, winner: "Tatiana Suarez", method: "Decisão", weightClass: "W. Strawweight" },
-      { f1: "Davey Grant", f2: "Elijah Smith", oV: 2.35, oA: 1.60, winner: "Davey Grant", method: "KO/TKO", weightClass: "Bantamweight" }
+      { f1: "Davey Grant", f2: "Elijah Smith", oV: 2.35, oA: 1.60, winner: "Elijah Smith", method: "KO/TKO", weightClass: "Bantamweight" }
     ]
   },
 
@@ -586,16 +757,17 @@ const KNOWN_RESULTS_PATCH = {
   "FN Moicano vs Duncan": [
     { luta: "Renato Moicano vs Chris Duncan", resultado: "Renato Moicano", metReal: "Submissão" },
     { luta: "Virna Jandiroba vs Tabatha Ricci", resultado: "Virna Jandiroba", metReal: "Decisão" },
-    { luta: "Abdul Rakhman Yakhyaev vs Brendson Ribeiro", resultado: "Abdul Rakhman Yakhyaev", metReal: "Submissão" }
-  ],
-  "UFC Fight Night: Kape vs. Horiguchi": [
-    { luta: "Manel Kape vs Kyoji Horiguchi", resultado: "Kyoji Horiguchi", metReal: "KO/TKO" }
-  ],
-  "UFC Fight Night 281": [
-    { luta: "Dricus Du Plessis vs Kamaru Usman", resultado: "Dricus Du Plessis", metReal: "Decisão" }
-  ],
-  "UFC 330: Makhachev vs. Machado Garry": [
-    { luta: "Islam Makhachev vs Ian Machado Garry", resultado: "Islam Makhachev", metReal: "Decisão" }
+    { luta: "Abdul Rakhman Yakhyaev vs Brendson Ribeiro", resultado: "Abdul Rakhman Yakhyaev", metReal: "Submissão" },
+    { luta: "Ethyn Ewing vs Rafael Estevam", resultado: "Ethyn Ewing", metReal: "KO/TKO" },
+    { luta: "Tommy McMillen vs Manolo Zecchini", resultado: "Tommy McMillen", metReal: "KO/TKO" },
+    { luta: "Jose Delano vs Robert Ruchala", resultado: "Jose Delano", metReal: "Decisão" },
+    { luta: "Guilherme Pat vs Thomas Petersen", resultado: "Thomas Petersen", metReal: "Decisão" },
+    { luta: "Alessandro Costa vs Stewart Nicoll", resultado: "Alessandro Costa", metReal: "KO/TKO" },
+    { luta: "Lando Vannata vs Darrius Flowers", resultado: "Darrius Flowers", metReal: "KO/TKO" },
+    { luta: "Alice Pereira vs Hailey Cowan", resultado: "Alice Pereira", metReal: "KO/TKO" },
+    { luta: "Azamat Bekoev vs Tresean Gore", resultado: "Tresean Gore", metReal: "Submissão" },
+    { luta: "Dione Barbosa vs Melissa Gatto", resultado: "Dione Barbosa", metReal: "Decisão" },
+    { luta: "Kai Kamaka III vs Dakota Hope", resultado: "Kai Kamaka III", metReal: "Decisão" }
   ]
 };
 
@@ -910,10 +1082,6 @@ const VERIFIED_AGES_RECORDS = {
   "ľudovít klein": {"age":31,"wins":24,"losses":6,"draws":1,"height_cm":170,"reach_cm":184}
 };
 
-function stripAccents(s) {
-  return String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-}
-
 function run() {
   console.log('1. Lendo modelo_planilha_ufc.xlsx...');
   const entries = readZipEntries(XLSX_PATH);
@@ -935,18 +1103,18 @@ function run() {
   if (lutSheet && entries.has(lutSheet.path)) {
     const rows = parseSheetRows(entries.get(lutSheet.path), sharedStrings);
     for (let i = 1; i < rows.length; i++) {
-      const name = String(rows[i]?.[0] || '').trim().toLowerCase();
+      const name = cleanFighterName(rows[i]?.[0]).toLowerCase();
       const style = String(rows[i]?.[1] || '').trim();
       if (!name || !style) continue;
       lutadoresStyles[name] = style;
-      lutadoresStyles[stripAccents(name)] = style;
+      lutadoresStyles[normKey(name)] = style;
     }
   }
 
   const eventsMap = new Map();
   const upsertEvent = (ev) => {
     if (!ev || !ev.nome) return;
-    const key = stripAccents(ev.nome).toLowerCase().trim();
+    const key = normKey(ev.nome);
     const shortKey = key.split(':')[0].trim();
 
     // Match exact name OR numbered UFC PPV prefix (e.g. "ufc 327" vs "ufc 327: ...")
@@ -963,9 +1131,17 @@ function run() {
 
     if (matchedKey) {
       const existing = eventsMap.get(matchedKey);
-      // Merge: prefer more complete fights / newer results
-      const mergedFights = ev.cardLutas.length >= existing.cardLutas.length ? ev.cardLutas : existing.cardLutas;
-      const mergedLutas = ev.lutas.some(l => l.resultado) ? ev.lutas : existing.lutas;
+      const hasNewResults = ev.lutas.some(l => l.resultado);
+      const mergedOddCard = { ...existing.oddCard, ...ev.oddCard };
+      const rawMergedFights = (hasNewResults && existing.lutas.length === 0) || ev.cardLutas.length >= existing.cardLutas.length
+        ? ev.cardLutas
+        : existing.cardLutas;
+      const mergedFights = rawMergedFights.map(c => ({
+        ...c,
+        oV: c.oV ?? mergedOddCard[cleanFighterName(c.fV).toLowerCase()] ?? mergedOddCard[normKey(c.fV)] ?? null,
+        oA: c.oA ?? mergedOddCard[cleanFighterName(c.fA).toLowerCase()] ?? mergedOddCard[normKey(c.fA)] ?? null,
+      }));
+      const mergedLutas = hasNewResults ? ev.lutas : existing.lutas;
       const validResults = mergedLutas.filter(l => l.resultado && l.resultado.trim() !== '' && l.resultado.trim() !== '?');
 
       eventsMap.delete(matchedKey);
@@ -974,7 +1150,7 @@ function run() {
         ...ev,
         cardLutas: mergedFights,
         lutas: mergedLutas,
-        oddCard: { ...existing.oddCard, ...ev.oddCard },
+        oddCard: mergedOddCard,
         isFuturo: mergedLutas.length === 0 || validResults.length === 0,
       });
     } else {
@@ -1003,9 +1179,9 @@ function run() {
 
   for (const lut of lutadoresNovos) {
     if (lut.nome && lut.estilo) {
-      const cleanName = lut.nome.replace(/\(c\)/gi, '').trim().toLowerCase();
+      const cleanName = cleanFighterName(lut.nome).toLowerCase();
       lutadoresStyles[cleanName] = lut.estilo;
-      lutadoresStyles[stripAccents(cleanName)] = lut.estilo;
+      lutadoresStyles[normKey(cleanName)] = lut.estilo;
     }
   }
 
@@ -1013,26 +1189,33 @@ function run() {
     upsertEvent(convertSnippetEvent(rawEv, true));
   }
   for (const rawEv of dadosFuturos) {
-    // Eventos de Jun-Ago 2026 já aconteceram em Nov 2026
     upsertEvent(convertSnippetEvent(rawEv, false));
   }
 
-  // 3. Mesclar eventos verificados de 2026 (Sep-Dec 2026)
+  // 3. Mesclar eventos verificados de 2026 (Jun-Dez 2026)
   for (const rawEv of EXTRA_EVENTS_2026) {
     upsertEvent(convertSnippetEvent(rawEv, false));
   }
 
-  // 4. Aplicar patches de resultados conhecidos (Abr-Ago 2026)
+  // 4. Aplicar patches de resultados conhecidos (ex: eventos da planilha com resultados incompletos)
   for (const [evKey, patches] of Object.entries(KNOWN_RESULTS_PATCH)) {
-    const lowKey = stripAccents(evKey).toLowerCase();
+    const targetEvKey = normKey(evKey);
     for (const [, ev] of eventsMap) {
-      if (stripAccents(ev.nome).toLowerCase().includes(lowKey.split(':')[0])) {
+      if (normKey(ev.nome) === targetEvKey) {
         for (const p of patches) {
-          const target = ev.lutas.find(l => stripAccents(l.luta).toLowerCase().includes(stripAccents(p.luta.split(' vs ')[0]).toLowerCase()));
+          const [pf1, pf2] = p.luta.split(/\s+vs\.?\s+/i).map(normKey);
+          const target = ev.lutas.find(l => {
+            const [lf1, lf2] = String(l.luta || '').split(/\s+vs\.?\s+/i).map(normKey);
+            return (lf1 === pf1 && lf2 === pf2) || (lf1 === pf2 && lf2 === pf1);
+          });
+          const inCard = ev.cardLutas.some(c => {
+            const cf1 = normKey(c.fV), cf2 = normKey(c.fA);
+            return (cf1 === pf1 && cf2 === pf2) || (cf1 === pf2 && cf2 === pf1);
+          });
           if (target) {
             target.resultado = p.resultado;
             target.metReal = p.metReal;
-          } else {
+          } else if (inCard) {
             ev.lutas.push({ luta: p.luta, resultado: p.resultado, metReal: p.metReal, picks: {} });
           }
         }
@@ -1042,13 +1225,10 @@ function run() {
     }
   }
 
-  // Garantir que eventos com data anterior a 13/11/2026 que ainda não tinham resultado marcado
-  // (ex: Jun-Ago 2026 sem vencedor explícito no preenchimento futuro) fiquem corretamente marcados:
-  // Só são futuros se isFuturo === true E a data for >= 13/11/2026 (ou sem resultado após 13/11/2026).
+  // Só são futuros se a data for >= 13/11/2026
   const TODAY_MS = new Date('2026-11-13T00:00:00Z').getTime();
   const eventsList = [...eventsMap.values()].map(ev => {
     const ms = parseDateMs(ev.dataEvento);
-    // Se já passou da data e não tem resultado registrado, mantém nos passados se tiver data < hoje
     if (ms > 0 && ms < TODAY_MS) {
       ev.isFuturo = false;
     } else if (ms >= TODAY_MS) {
@@ -1064,31 +1244,162 @@ function run() {
   const pastCount = eventsList.filter(e => !e.isFuturo).length;
   console.log(`   -> Total consolidado: ${eventsList.length} eventos (${futureCount} futuros, ${pastCount} passados).`);
 
-  // 5. Enriquecer FIGHTERS_DB (js/fighters-db.js e api/fighters-db-node.js)
-  const fightersDb = { ...require(FIGHTERS_NODE_PATH) };
+  // 5. Enriquecer FIGHTERS_DB (js/fighters-db.js e api/fighters-db-node.js) de forma idempotente
+  const mergeRecord = (a = {}, b = {}) => {
+    const aBouts = (a.wins !== undefined ? (a.wins + (a.losses || 0) + (a.draws || 0)) : -1);
+    const bBouts = (b.wins !== undefined ? (b.wins + (b.losses || 0) + (b.draws || 0)) : -1);
+    const pickRec = bBouts >= aBouts ? b : a;
+    const out = {
+      height_cm: (b.height_cm && b.height_cm > 0) ? b.height_cm : (a.height_cm || 0),
+      reach_cm: (b.reach_cm && b.reach_cm > 0) ? b.reach_cm : (a.reach_cm || 0),
+      weight_class: (b.weight_class && b.weight_class !== 'UFC') ? b.weight_class : (a.weight_class || 'UFC'),
+      stance: (b.stance && b.stance !== 'Orthodox') ? b.stance : (a.stance || b.stance || 'Orthodox'),
+      style: (b.style && b.style !== 'All-Round') ? b.style : (a.style || b.style || 'All-Round'),
+    };
+    const age = (b.age >= 18 && b.age <= 60) ? b.age : (a.age >= 18 && a.age <= 60 ? a.age : undefined);
+    if (age !== undefined) out.age = age;
+    if (pickRec.wins !== undefined) out.wins = pickRec.wins;
+    if (pickRec.losses !== undefined) out.losses = pickRec.losses;
+    if (pickRec.draws !== undefined) out.draws = pickRec.draws;
+    return out;
+  };
 
-  // Contar estatísticas nos eventos para fallback de finishing rate / cartel UFC
+  const MONONYM_FIGHTERS = new Set([
+    'alatengheili', 'angga', 'aoriqileng', 'asjabharan', 'balajin',
+    'jiniushiyue', 'kaiwen', 'maheshate', 'mizuki', 'rongzhu',
+    'sulangrangbo', 'sumudaerji', 'wulijiburen', 'yibugele', 'yizha'
+  ]);
+  const rawNodeDb = require(FIGHTERS_NODE_PATH);
+  const fightersDb = {};
+  for (const [k, v] of Object.entries(rawNodeDb)) {
+    if (!v || typeof v !== 'object') continue;
+    // Remover todos os stubs de sobrenome de palavra única preservando apenas monônimos reais
+    if (!k.includes(' ') && !MONONYM_FIGHTERS.has(normKey(k))) continue;
+    const cleaned = {
+      height_cm: v.height_cm || 0,
+      reach_cm: v.reach_cm || 0,
+      weight_class: v.weight_class || 'UFC',
+      stance: v.stance || 'Orthodox',
+      style: v.style || 'All-Round',
+    };
+    if (v.age !== undefined && v.age > 0) cleaned.age = v.age;
+    if (v.wins !== undefined) cleaned.wins = v.wins;
+    if (v.losses !== undefined) cleaned.losses = v.losses;
+    if (v.draws !== undefined) cleaned.draws = v.draws;
+
+    const nk = normKey(k);
+    if (!nk) continue;
+    fightersDb[nk] = mergeRecord(fightersDb[nk], cleaned);
+  }
+
+  // Adicionar novos lutadores verificados
+  for (const [k, info] of Object.entries(NEW_FIGHTERS_DATA)) {
+    const nk = normKey(k);
+    fightersDb[nk] = mergeRecord(fightersDb[nk], info);
+  }
+
+  // Enriquecer idades e cartéis verificados (ESPN / Wiki) sem perder estilo/guarda existentes
+  for (const [k, info] of Object.entries(VERIFIED_AGES_RECORDS)) {
+    const nk = normKey(k);
+    const cur = fightersDb[nk] || {
+      height_cm: 0,
+      reach_cm: 0,
+      weight_class: 'UFC',
+      stance: 'Orthodox',
+      style: lutadoresStyles[nk] || 'All-Round',
+    };
+    if (info.age >= 18 && info.age <= 60) cur.age = info.age;
+    if (info.wins !== undefined) cur.wins = info.wins;
+    if (info.losses !== undefined) cur.losses = info.losses;
+    if (info.draws !== undefined) cur.draws = info.draws;
+    if ((!cur.height_cm || cur.height_cm === 0) && info.height_cm > 0) cur.height_cm = info.height_cm;
+    if ((!cur.reach_cm || cur.reach_cm === 0) && info.reach_cm > 0) cur.reach_cm = info.reach_cm;
+    fightersDb[nk] = cur;
+  }
+
+  // Sincronizar aliases com seus nomes canônicos antes do preenchimento de eventos
+  for (const [alias, canon] of Object.entries(CANONICAL_ALIASES)) {
+    const na = normKey(alias), nc = normKey(canon);
+    if (fightersDb[na] || fightersDb[nc]) {
+      const merged = mergeRecord(fightersDb[na], fightersDb[nc]);
+      fightersDb[nc] = merged;
+      fightersDb[na] = { ...merged };
+    }
+  }
+
+  // Garantir que lutadores de TODOS os eventos (passados e futuros) existam no DB
+  for (const ev of eventsList) {
+    for (const c of ev.cardLutas || []) {
+      [c.fV, c.fA].forEach(name => {
+        if (!name) return;
+        const clean = normKey(name);
+        const canon = resolveCanonical(name);
+        if (!clean) return;
+        if (!fightersDb[clean]) {
+          fightersDb[clean] = fightersDb[canon]
+            ? { ...fightersDb[canon] }
+            : {
+                height_cm: 0,
+                reach_cm: 0,
+                weight_class: c.weightClass || 'UFC',
+                stance: 'Orthodox',
+                style: lutadoresStyles[clean] || lutadoresStyles[canon] || 'All-Round',
+              };
+        }
+      });
+    }
+    for (const l of ev.lutas || []) {
+      const parts = String(l.luta || '').split(/\s+vs\.?\s+/i);
+      if (parts.length < 2) continue;
+      parts.slice(0, 2).forEach(name => {
+        const clean = normKey(name);
+        const canon = resolveCanonical(name);
+        if (!clean || fightersDb[clean]) return;
+        fightersDb[clean] = fightersDb[canon]
+          ? { ...fightersDb[canon] }
+          : {
+              height_cm: 0,
+              reach_cm: 0,
+              weight_class: 'UFC',
+              stance: 'Orthodox',
+              style: lutadoresStyles[clean] || lutadoresStyles[canon] || 'All-Round',
+            };
+      });
+    }
+  }
+
+  // Contar estatísticas nos eventos para fallback de finishing rate / cartel UFC (não-cumulativo)
   const eventStats = {};
+  const ensureStat = (k) => {
+    if (!eventStats[k]) eventStats[k] = { w: 0, l: 0, d: 0, ko: 0, sub: 0, dec: 0 };
+    return eventStats[k];
+  };
+
   for (const ev of eventsList) {
     for (const l of ev.lutas || []) {
       if (!l.luta || !l.resultado) continue;
-      const parts = l.luta.split(/\s+vs\s+/i);
+      const parts = l.luta.split(/\s+vs\.?\s+/i);
       if (parts.length < 2) continue;
-      const f1 = stripAccents(parts[0].trim()).toLowerCase();
-      const f2 = stripAccents(parts[1].trim()).toLowerCase();
-      const res = stripAccents(l.resultado).toLowerCase();
+      const f1 = resolveCanonical(parts[0]);
+      const f2 = resolveCanonical(parts[1]);
+      const res = resolveCanonical(l.resultado);
       const met = normalizeMethod(l.metReal);
-      if (res === 'draw' || res === 'nc' || res === 'empate') continue;
+      if (!f1 || !f2) continue;
+      if (res === 'draw' || res === 'nc' || res === 'empate' || met === 'NC' || met === 'Empate' || (met === 'Outro' && res === 'empate')) {
+        ensureStat(f1).d++;
+        ensureStat(f2).d++;
+        continue;
+      }
 
-      const f1Last = f1.split(' ').pop();
-      const f2Last = f2.split(' ').pop();
-      const f1Won = res.includes(f1) || (f1Last.length > 2 && res.includes(f1Last));
-      const f2Won = !f1Won && (res.includes(f2) || (f2Last.length > 2 && res.includes(f2Last)));
+      const f1Tokens = f1.split(' ').filter(Boolean);
+      const f2Tokens = f2.split(' ').filter(Boolean);
+      const resTokens = res.split(' ').filter(Boolean);
+      const f1Last = f1Tokens[f1Tokens.length - 1] || '';
+      const f2Last = f2Tokens[f2Tokens.length - 1] || '';
+      const sameLast = f1Last === f2Last;
 
-      const ensureStat = (k) => {
-        if (!eventStats[k]) eventStats[k] = { w: 0, l: 0, ko: 0, sub: 0, dec: 0 };
-        return eventStats[k];
-      };
+      const f1Won = res === f1 || f1Tokens.every(t => resTokens.includes(t)) || (!sameLast && f1Last.length > 2 && resTokens.includes(f1Last));
+      const f2Won = !f1Won && (res === f2 || f2Tokens.every(t => resTokens.includes(t)) || (!sameLast && f2Last.length > 2 && resTokens.includes(f2Last)));
 
       if (f1Won) {
         const s1 = ensureStat(f1); s1.w++;
@@ -1102,69 +1413,30 @@ function run() {
     }
   }
 
-  // Adicionar novos lutadores verificados
-  for (const [k, info] of Object.entries(NEW_FIGHTERS_DATA)) {
-    fightersDb[k] = { ...(fightersDb[k] || {}), ...info };
-  }
-
-  // Enriquecer idades e cartéis verificados (ESPN / Wiki) sem perder estilo/guarda existentes
-  for (const [k, info] of Object.entries(VERIFIED_AGES_RECORDS)) {
-    const cleanKey = stripAccents(k).toLowerCase();
-    const cur = fightersDb[k] || fightersDb[cleanKey] || {
-      height_cm: 0,
-      reach_cm: 0,
-      weight_class: 'UFC',
-      stance: 'Orthodox',
-      style: lutadoresStyles[cleanKey] || 'All-Round',
-    };
-    if (info.age >= 18 && info.age <= 60) cur.age = info.age;
-    if (info.wins !== undefined) cur.wins = info.wins;
-    if (info.losses !== undefined) cur.losses = info.losses;
-    if (info.draws !== undefined) cur.draws = info.draws;
-    if ((!cur.height_cm || cur.height_cm === 0) && info.height_cm > 0) cur.height_cm = info.height_cm;
-    if ((!cur.reach_cm || cur.reach_cm === 0) && info.reach_cm > 0) cur.reach_cm = info.reach_cm;
-    fightersDb[k] = cur;
-    if (cleanKey !== k && fightersDb[cleanKey]) {
-      fightersDb[cleanKey] = { ...fightersDb[cleanKey], ...cur };
-    }
-  }
-
-  // Atualizar estilos da planilha & estatísticas históricas em fightersDb
+  // Atualizar estilos da planilha & estatísticas históricas em fightersDb (sem acumular)
   for (const [k, data] of Object.entries(fightersDb)) {
-    const cleanKey = stripAccents(k).toLowerCase();
-    const sheetStyle = lutadoresStyles[k] || lutadoresStyles[cleanKey];
+    const canon = resolveCanonical(k);
+    const sheetStyle = lutadoresStyles[k] || lutadoresStyles[canon];
     if (sheetStyle) {
       if (sheetStyle.toLowerCase().includes('jiu')) data.style = 'Grappler';
       else if (['Striker', 'Grappler', 'Wrestler', 'All-Round'].includes(sheetStyle)) data.style = sheetStyle;
     }
-    const st = eventStats[k] || eventStats[cleanKey];
+    const st = eventStats[canon] || eventStats[k];
     if (st) {
-      if (st.ko > 0) data.ko_wins = (data.ko_wins || 0) + st.ko;
-      if (st.sub > 0) data.sub_wins = (data.sub_wins || 0) + st.sub;
-      if (st.dec > 0) data.dec_wins = (data.dec_wins || 0) + st.dec;
+      if (st.ko > 0) data.ko_wins = st.ko;
+      if (st.sub > 0) data.sub_wins = st.sub;
+      if (st.dec > 0) data.dec_wins = st.dec;
       if (data.wins === undefined) {
-        data.ufc_recent = `${st.w}-${st.l}`;
+        data.ufc_recent = (st.w === 0 && st.l === 0 && st.d > 0) ? `0-0-${st.d}` : `${st.w}-${st.l}`;
       }
     }
   }
 
-  // Garantir que lutadores de lutas futuras existam no DB
-  for (const ev of eventsList.filter(e => e.isFuturo)) {
-    for (const c of ev.cardLutas) {
-      [c.fV, c.fA].forEach(name => {
-        if (!name) return;
-        const clean = stripAccents(name).toLowerCase().trim();
-        if (!fightersDb[name.toLowerCase().trim()] && !fightersDb[clean]) {
-          fightersDb[clean] = {
-            height_cm: 0,
-            reach_cm: 0,
-            weight_class: c.weightClass || 'UFC',
-            stance: 'Orthodox',
-            style: lutadoresStyles[clean] || 'All-Round',
-          };
-        }
-      });
-    }
+  // Garantir paridade final entre aliases e chaves canônicas
+  for (const [alias, canon] of Object.entries(CANONICAL_ALIASES)) {
+    const na = normKey(alias), nc = normKey(canon);
+    if (fightersDb[nc]) fightersDb[na] = { ...fightersDb[nc] };
+    else if (fightersDb[na]) fightersDb[nc] = { ...fightersDb[na] };
   }
 
   // Garantir que a Luta Principal esteja sempre no índice 0 de cardLutas
@@ -1245,65 +1517,86 @@ if (typeof module !== 'undefined') module.exports = FIGHTERS_DB;
   const clientHelpers = `
 function _normalizeFighterName(name) {
   return String(name || '')
+    .replace(/\\s*\\((?:c|ic)\\)\\s*/gi, ' ')
+    .replace(/[łŁ]/g, 'l')
+    .replace(/[đĐ]/g, 'd')
+    .replace(/[øØ]/g, 'o')
     .normalize('NFD')
     .replace(/[\\u0300-\\u036f]/g, '')
     .toLowerCase()
+    .replace(/[^a-z0-9\\s'-]/g, '')
+    .replace(/\\s+/g, ' ')
     .trim();
 }
 
 function getFighterData(name) {
   if (!name) return null;
-  let nl = _normalizeFighterName(name);
+  const rawNl = _normalizeFighterName(name);
   const rawLower = String(name).toLowerCase().trim();
 
   const ALIASES = {
-    "torres": "manuel torres",
-    "fiziev": "rafael fiziev",
-    "makhachev": "islam makhachev",
-    "mackachev": "islam makhachev",
-    "islam mackachev": "islam makhachev",
-    "machado garry": "ian machado garry",
-    "ian garry": "ian machado garry",
-    "ian": "ian machado garry",
-    "shara": "shara magomedov",
-    "shara bullet": "shara magomedov",
-    "sharabutdin magomedov": "shara magomedov",
-    "ankalaev": "magomed ankalaev",
-    "rountree jr.": "khalil rountree jr",
-    "medic": "uros medic",
+    "abdul rakhman yakhyaev": "abdul-rakhman yakhyaev",
+    "abus magomedov": "abusupiyan magomedov",
+    "patricio pitbull": "patricio freire",
+    "patricio \\"pitbull\\" freire": "patricio freire",
+    "shara magomedov": "sharabutdin magomedov",
+    "shara bullet": "sharabutdin magomedov",
     "bia mesquita": "beatriz mesquita",
-    "rodriguez": "daniel rodriguez"
+    "lupita godinez": "loopy godinez",
+    "king green": "bobby green",
+    "sumudaerji": "su mudaerji",
+    "aoriqileng": "aori qileng",
+    "rong zhu": "rongzhu",
+    "sergey spivak": "serghei spivac",
+    "serghei spivak": "serghei spivac",
+    "chepe mariscal": "jose mariscal",
+    "khalil rountree": "khalil rountree jr",
+    "khalil rountree jr.": "khalil rountree jr",
+    "raul rosas jr.": "raul rosas jr",
+    "michael aswell jr.": "michael aswell",
+    "michael aswell jr": "michael aswell",
+    "baisangur susurkaev": "baisangur susurkajev",
+    "eduardo chapolin": "eduardo henrique",
+    "marcus buchecha": "marcus almeida",
+    "ian garry": "ian machado garry",
+    "islam mackachev": "islam makhachev"
   };
 
-  if (ALIASES[nl]) nl = ALIASES[nl];
-
+  const nl = ALIASES[rawNl] || rawNl;
   const customFighters = getCustomFighters();
 
   const searchIn = (db) => {
     if (!db) return null;
     if (db[rawLower]) return { ...db[rawLower], name: name };
+    if (db[rawNl]) return { ...db[rawNl], name: name };
     if (db[nl]) return { ...db[nl], name: name };
 
-    // Match sem acentos nas chaves
-    for (const [key, data] of Object.entries(db)) {
-      if (_normalizeFighterName(key) === nl) return { ...data, name: name };
-    }
-
-    const words = nl.split(/\\s+/).filter(w => w.length > 2);
-    for (const word of words) {
-      if (db[word]) return { ...db[word], name: name };
-    }
-
-    let bestMatch = null;
+    // Match normalizado exato ou por equivalência de hífen
+    const nlSpace = nl.replace(/-/g, ' ');
     for (const [key, data] of Object.entries(db)) {
       const kNorm = _normalizeFighterName(key);
-      if (kNorm.includes(nl) || nl.includes(kNorm)) {
-        if (!bestMatch || ((bestMatch.reach_cm || 0) === 0 && (data.reach_cm || 0) > 0)) {
-          bestMatch = { ...data, name: name };
-        }
+      if (kNorm === nl || kNorm === rawNl || kNorm.replace(/-/g, ' ') === nlSpace) {
+        return { ...data, name: name };
       }
     }
-    return bestMatch;
+
+    // Match seguro de subconjunto de tokens (exige >= 2 tokens em ambos para evitar colisão de sobrenome)
+    const words = nlSpace.split(/\\s+/).filter(Boolean);
+    if (words.length >= 2) {
+      let bestMatch = null;
+      for (const [key, data] of Object.entries(db)) {
+        const kWords = _normalizeFighterName(key).replace(/-/g, ' ').split(/\\s+/).filter(Boolean);
+        if (kWords.length >= 2 && (words.every(w => kWords.includes(w)) || kWords.every(w => words.includes(w)))) {
+          const better = !bestMatch
+            || (bestMatch.wins === undefined && data.wins !== undefined)
+            || ((bestMatch.reach_cm || 0) === 0 && (data.reach_cm || 0) > 0);
+          if (better) bestMatch = { ...data, name: name };
+        }
+      }
+      if (bestMatch) return bestMatch;
+    }
+
+    return null;
   };
 
   const foundCustom = searchIn(customFighters);
@@ -1316,7 +1609,7 @@ function getFighterData(name) {
 
 function getCustomFighters() {
   try {
-    const custom = localStorage.getItem('custom_fighters_db_v2');
+    const custom = localStorage.getItem('custom_fighters_db_v3');
     return custom ? JSON.parse(custom) : {};
   } catch (e) {
     return {};
@@ -1328,7 +1621,7 @@ function saveCustomFighter(name, data) {
   const custom = getCustomFighters();
   const key = _normalizeFighterName(name);
   custom[key] = { ...(custom[key] || {}), ...data };
-  localStorage.setItem('custom_fighters_db_v2', JSON.stringify(custom));
+  localStorage.setItem('custom_fighters_db_v3', JSON.stringify(custom));
 }
 `;
 

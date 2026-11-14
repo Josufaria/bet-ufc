@@ -7,27 +7,82 @@ const TIMEOUT = 9000;
 // ═══════════════════════════════════════════════════════════════════
 // 1. BANCO DE DADOS LOCAL (física – rápido, sem custo)
 // ═══════════════════════════════════════════════════════════════════
+function _normDBName(name) {
+  return String(name || '')
+    .replace(/\s*\((?:c|ic)\)\s*/gi, ' ')
+    .replace(/[łŁ]/g, 'l')
+    .replace(/[đĐ]/g, 'd')
+    .replace(/[øØ]/g, 'o')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s'-]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+const DB_ALIASES = {
+  "abdul rakhman yakhyaev": "abdul-rakhman yakhyaev",
+  "abus magomedov": "abusupiyan magomedov",
+  "patricio pitbull": "patricio freire",
+  "patricio \"pitbull\" freire": "patricio freire",
+  "shara magomedov": "sharabutdin magomedov",
+  "shara bullet": "sharabutdin magomedov",
+  "bia mesquita": "beatriz mesquita",
+  "lupita godinez": "loopy godinez",
+  "king green": "bobby green",
+  "sumudaerji": "su mudaerji",
+  "aoriqileng": "aori qileng",
+  "rong zhu": "rongzhu",
+  "sergey spivak": "serghei spivac",
+  "serghei spivak": "serghei spivac",
+  "chepe mariscal": "jose mariscal",
+  "khalil rountree": "khalil rountree jr",
+  "khalil rountree jr.": "khalil rountree jr",
+  "raul rosas jr.": "raul rosas jr",
+  "michael aswell jr.": "michael aswell",
+  "michael aswell jr": "michael aswell",
+  "baisangur susurkaev": "baisangur susurkajev",
+  "eduardo chapolin": "eduardo henrique",
+  "marcus buchecha": "marcus almeida",
+  "ian garry": "ian machado garry",
+  "islam mackachev": "islam makhachev"
+};
+
 function lookupInDB(name) {
   if (!name) return null;
-  const nl = name.toLowerCase().trim();
+  const rawLower = String(name).toLowerCase().trim();
+  const rawNl = _normDBName(name);
+  const nl = DB_ALIASES[rawNl] || rawNl;
 
+  if (FIGHTERS_DB[rawLower]) return { ...FIGHTERS_DB[rawLower] };
+  if (FIGHTERS_DB[rawNl]) return { ...FIGHTERS_DB[rawNl] };
   if (FIGHTERS_DB[nl]) return { ...FIGHTERS_DB[nl] };
 
-  const words = nl.split(/\s+/).filter(w => w.length > 2);
-  let bestMatch = null;
-
+  const nlSpace = nl.replace(/-/g, ' ');
   for (const [key, data] of Object.entries(FIGHTERS_DB)) {
-    if (key.includes(nl) || nl.includes(key)) {
-      if (!bestMatch || (bestMatch.reach_cm === 0 && data.reach_cm > 0))
-        bestMatch = { ...data };
-    }
-    const keyWords = key.split(/\s+/);
-    if (words.some(w => keyWords.includes(w))) {
-      if (!bestMatch || (bestMatch.reach_cm === 0 && data.reach_cm > 0))
-        bestMatch = { ...data };
+    const kNorm = _normDBName(key);
+    if (kNorm === nl || kNorm === rawNl || kNorm.replace(/-/g, ' ') === nlSpace) {
+      return { ...data };
     }
   }
-  return bestMatch;
+
+  const words = nlSpace.split(/\s+/).filter(Boolean);
+  if (words.length >= 2) {
+    let bestMatch = null;
+    for (const [key, data] of Object.entries(FIGHTERS_DB)) {
+      const keyWords = _normDBName(key).replace(/-/g, ' ').split(/\s+/).filter(Boolean);
+      if (keyWords.length >= 2 && (words.every(w => keyWords.includes(w)) || keyWords.every(w => words.includes(w)))) {
+        const better = !bestMatch
+          || (bestMatch.wins === undefined && data.wins !== undefined)
+          || ((bestMatch.reach_cm || 0) === 0 && (data.reach_cm || 0) > 0);
+        if (better) bestMatch = { ...data };
+      }
+    }
+    if (bestMatch) return bestMatch;
+  }
+
+  return null;
 }
 
 // ═══════════════════════════════════════════════════════════════════
